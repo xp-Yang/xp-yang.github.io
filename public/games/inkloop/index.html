@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#edf0f2" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="圈个小世界" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="/games/inkloop/manifest.webmanifest" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/games/inkloop/icons/apple-touch-icon.png" />
+  <meta name="description" content="圈个小世界 · 不限时3D圈地挑战，领地达到100%即可获胜，和好友在同一张地图比成绩。" />
+  <title>圈个小世界 · 圈地挑战</title>
+  <script type="module" crossorigin src="/games/inkloop/assets/index-C7tfLJKM.js"></script>
+  <link rel="stylesheet" crossorigin href="/games/inkloop/assets/index-CKhXQySa.css">
+</head>
+<body>
+  <main id="stage" class="stage" data-screen="home" aria-label="圈个小世界3D试玩">
+    <canvas id="game" tabindex="0" aria-label="圈个小世界，按回车开始，按住鼠标拖动转向，手机滑动底部控制区，松手继续前进"></canvas>
+    <div class="hud" aria-label="对局信息">
+      <a class="wordmark" href="/" aria-label="圈个小世界首页"><span class="brand-mark" aria-hidden="true"></span><span>圈个小世界 <small>INKLOOP</small></span></a>
+      <section class="scoreboard" aria-label="领地成绩">
+        <span class="score-label">你的领地</span>
+        <div class="current-score"><strong id="current-score">1.6</strong><span>%</span></div>
+        <div class="peak-score">本局最高 <b id="peak-score">1.6%</b></div>
+        <div class="best-score">最佳纪录 <span id="best-score">0.0%</span></div>
+        <div class="win-goal" title="领地达到99.99%即按100%胜利结算">目标 100% · 极小空隙可忽略</div>
+      </section>
+      <div class="timer" aria-label="已用时 00:00"><span class="timer-icon" aria-hidden="true"></span><strong id="timer">00:00</strong><span class="timer-label">已用时</span></div>
+      <aside id="leaderboard" class="leaderboard" aria-label="6 人领地排行"><div class="leaderboard-title">领地排行 <span id="alive-count">6 / 6</span></div><ol id="rankings"></ol></aside>
+      <button id="pause" class="icon-button pause-button" aria-label="暂停游戏" title="暂停 · 空格"><span aria-hidden="true">Ⅱ</span></button>
+      <aside id="minimap" class="minimap" aria-label="全图小地图：显示领地、角色和当前视野，青绿色为你" hidden>
+        <canvas id="minimap-terrain" aria-hidden="true"></canvas>
+        <canvas id="minimap-markers" aria-hidden="true"></canvas>
+      </aside>
+    </div>
+    <section id="test-controls" class="test-controls" aria-label="测试模式设置">
+      <div class="test-toolbar">
+        <button id="game-log-toggle" class="game-log-toggle" type="button" aria-expanded="false" aria-controls="game-log-panel">日志</button>
+        <button id="test-mode-toggle" class="test-mode-toggle" type="button" role="switch" aria-checked="false" aria-controls="test-settings"><span>测试模式</span><span class="switch-track" aria-hidden="true"></span></button>
+        <button id="test-settings-toggle" class="test-settings-toggle" type="button" aria-label="展开测试设置" aria-expanded="false" aria-controls="test-settings" hidden><span aria-hidden="true">⌄</span></button>
+      </div>
+      <div id="test-settings" class="test-settings" hidden>
+        <div class="test-settings-heading"><strong>自由测试</strong><span>不计纪录 · 不参与挑战</span></div>
+        <label class="test-invincible"><span>玩家无敌<small>不会被切尾或围杀，即时生效</small></span><input id="test-invincible" type="checkbox" checked></label>
+        <div class="test-ai-heading"><label for="test-ai-count">AI 数量</label><output id="test-ai-value" for="test-ai-count">5</output></div>
+        <input id="test-ai-count" class="test-ai-count" type="range" min="0" max="10" step="1" value="5" aria-describedby="test-ai-note">
+        <div class="test-ai-scale" aria-hidden="true"><span>0 · 独自探索</span><span>10</span></div>
+        <label class="test-ai-heading" for="test-ai-strategy">AI 策略</label><select id="test-ai-strategy" class="test-ai-strategy"><option value="legacy">原版</option><option value="hunter">A 均衡猎手</option><option value="interceptor">B 激进截击</option><option value="pressure">C 领地压迫</option></select>
+        <button id="test-ai-apply" class="primary test-ai-apply" type="button">应用并重开</button>
+        <p id="test-ai-note" class="test-settings-note">同局 AI 使用同一策略。应用后保留种子、出生位置及无敌设置重新开局；首页仅更新预览。</p>
+      </div>
+    </section>
+    <section id="game-log-panel" class="game-log-panel" aria-labelledby="game-log-title" hidden>
+      <header class="game-log-heading"><div><h2 id="game-log-title">对局日志</h2><span id="game-log-live">等待开局 · 可浏览日志</span></div><button id="game-log-close" class="game-log-close" type="button" aria-label="关闭对局日志">×</button></header>
+      <div class="game-log-summary"><strong id="game-log-fps">FPS —</strong><span id="game-log-count">0 条日志</span></div>
+      <div class="game-log-filters"><label>事件 <select id="game-log-filter"><option value="all">全部事件</option><option value="kill">击杀</option><option value="ai">AI 决策</option><option value="territory">领地</option><option value="performance">性能</option><option value="system">系统</option></select></label><label class="game-log-player"><input id="game-log-player" type="checkbox">只看玩家相关</label></div>
+      <ol id="game-log-list" class="game-log-list" aria-label="最新日志在前"></ol>
+      <p id="game-log-empty" class="game-log-empty">暂无日志，开始游戏后会自动记录。</p>
+      <p id="game-log-visible" class="game-log-visible"></p>
+      <div class="game-log-actions"><button id="game-log-copy" type="button">复制全部</button><button id="game-log-text" type="button">下载 TXT</button><button id="game-log-json" type="button">下载 JSON</button><button id="game-log-clear" type="button">清空</button></div>
+      <p id="game-log-status" class="game-log-status" role="status"></p>
+      <p class="game-log-note">日志仅保存在本地内存，刷新后清空，不会上传。导出包含全部缓冲记录；清空只影响日志，不影响对局。</p>
+    </section>
+    <p id="test-mode-badge" class="test-mode-badge" role="status" hidden>测试中 · 玩家无敌 · 5 位 AI</p>
+    <div id="menu-layer" class="menu-layer">
+      <section id="home-panel" class="menu-panel home-panel" aria-labelledby="home-title">
+        <div class="menu-emblem" aria-hidden="true"><span></span></div>
+        <p class="eyebrow">不限时 · 圈地挑战</p><h1 id="home-title">把世界，<br>圈成你的颜色。</h1>
+        <p class="menu-description">离开领地，画出轨迹。<br>安全回家，接近占满即可获胜。</p>
+        <p id="home-challenge" class="challenge-notice" role="status" hidden></p>
+        <button id="start-game" class="primary large">开始圈地 <span aria-hidden="true">↗</span></button>
+        <button id="install-ios" class="text-button" type="button" hidden>添加到 iPhone 主屏幕</button>
+        <p id="opponent-note" class="opponent-note">你 + 5 位 AI 对手</p>
+        <label class="home-consent"><input id="home-consent" type="checkbox"> 自愿参与匿名玩法测试</label>
+      </section>
+      <section id="pause-panel" class="menu-panel" aria-labelledby="pause-title" hidden>
+        <p class="eyebrow">歇一下，再出发</p><h2 id="pause-title">世界等你回来。</h2>
+        <p class="menu-description">这一局已经暂停。<br>继续后，沿着最后的方向前进。</p>
+        <button id="resume-game" class="primary large">继续游戏 <span aria-hidden="true">→</span></button>
+        <button id="restart-paused" class="text-button">重新开始</button>
+      </section>
+      <section id="result-panel" class="menu-panel result-panel" aria-labelledby="result-title" hidden>
+        <div id="victory-emblem" class="victory-emblem" aria-hidden="true" hidden>
+          <svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="#fff3cd"/><path d="M21 17h22v12c0 8-5 13-11 13s-11-5-11-13V17Z" fill="#efbb48"/><path d="M21 20h-7v7c0 6 4 9 10 9M43 20h7v7c0 6-4 9-10 9" stroke="#da9d28" stroke-width="4" stroke-linejoin="round"/><path d="M32 42v8m-8 0h16" stroke="#be8b29" stroke-width="4" stroke-linecap="round"/><path d="m32 22 2.2 4.3 4.8.7-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8L25 27l4.8-.7L32 22Z" fill="#fff8df"/></svg>
+        </div>
+        <p class="eyebrow" id="result-title">这一局，你的小世界</p>
+        <div class="result-score"><strong id="result-score">0.0</strong><span>%</span></div>
+        <p id="result-label" class="result-label">本局最高领地</p><p id="result-reason" class="result-reason"></p><p id="result-comparison" class="comparison"></p>
+        <button id="restart-game" class="primary large">再来一局 <span aria-hidden="true">↗</span></button>
+        <button id="share-game" class="secondary">邀请好友挑战</button><button id="back-home" class="text-button">回到首页</button>
+      </section>
+      <section id="render-error-panel" class="menu-panel" role="alert" hidden>
+        <p class="eyebrow">3D 画面暂不可用</p><h2>稍等，再试一次。</h2><p id="render-error" class="menu-description"></p>
+        <button id="reload-game" class="primary large">重新载入</button>
+      </section>
+    </div>
+    <div class="bottom-hud">
+      <p id="game-hint" class="game-hint">按住拖动 · 短拖微调，长拖转向 · 松手继续前进</p>
+      <div id="control-pad" class="control-pad" tabindex="0" aria-label="方向控制区，按住并滑动改变前进方向">
+        <span class="pad-corner top-left" aria-hidden="true"></span><span class="pad-corner top-right" aria-hidden="true"></span>
+        <span class="pad-corner bottom-left" aria-hidden="true"></span><span class="pad-corner bottom-right" aria-hidden="true"></span>
+        <span class="pad-arrows" aria-hidden="true">↔</span><span class="pad-label">短拖微调 · 长拖转向</span><span id="pad-touch" class="pad-touch" aria-hidden="true"></span>
+      </div>
+    </div>
+    <p id="game-message" class="game-message" role="status" hidden></p>
+    <footer class="stage-footer"><span>原创验证版 <span id="app-version">v0.16.0</span></span><button id="privacy" class="text-button">隐私与测试说明</button></footer>
+  </main>
+  <dialog id="install-dialog" aria-labelledby="install-title">
+    <h2 id="install-title">把小世界放到主屏幕</h2>
+    <p>在 Safari 中打开本页，点“分享”→“添加到主屏幕”。如果出现“作为网页 App 打开”，请保持开启，再点“添加”。</p>
+    <p>从主屏幕图标进入后，底部拖动即可控制方向。切到后台时游戏自动暂停。</p>
+    <p>局域网试玩需要手机和电脑连接同一 Wi-Fi，电脑服务保持运行。HTTPS 部署版首次完整加载后支持离线普通游玩；好友挑战仍需联网。</p>
+    <button id="close-install" class="primary">知道了</button>
+  </dialog>
+  <dialog id="privacy-dialog" aria-labelledby="privacy-title">
+    <h2 id="privacy-title">这一局，只收集必要信息</h2><p>游戏不需要头像、通讯录或定位。普通游玩无需开启测试记录。</p>
+    <p>开启后，会使用随机测试编号记录开局、首次圈地、死亡、结算、重玩和挑战进入事件。数据仅用于本次玩法验证，服务端保留30天。好友挑战记录保留7天；成绩为本地计算的测试成绩，不用于奖励或正式排名。</p>
+    <p>右上角的对局日志独立于匿名玩法测试，仅保存在本地内存，不会上传。刷新后清空，也可随时清空或主动导出。</p>
+    <label class="consent"><input id="analytics-consent" type="checkbox"> 自愿参与匿名玩法测试</label>
+    <button id="delete-data" class="secondary">删除我的测试数据与挑战</button><p id="privacy-status" role="status"></p><button id="close-privacy" class="primary">知道了</button>
+  </dialog>
+  <dialog id="share-dialog" aria-labelledby="share-title">
+    <h2 id="share-title">同一张地图，换你来圈</h2><p id="challenge-description"></p><label for="challenge-link">好友挑战链接</label><input id="challenge-link" readonly><p id="share-note"></p>
+    <button id="copy-challenge" class="primary">复制挑战链接</button><button id="native-share" class="secondary">系统分享</button><a id="open-challenge" target="_blank" rel="noopener">打开挑战预览 ↗</a><p id="share-status" role="status"></p><button id="close-share" class="text-button">返回结算</button>
+  </dialog>
+</body>
+</html>
+
+
+
+
+

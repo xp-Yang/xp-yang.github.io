@@ -1,0 +1,22 @@
+[
+  {
+    "id": "project-inkloop",
+    "slug": "inkloop",
+    "type": "Project",
+    "title": "圈个小世界",
+    "summary": "把世界圈成你的颜色。拖动转向、回家圈地，与 AI 争夺一张随机生成的小世界。",
+    "publishedAt": "2026-09-13",
+    "tags": ["Game", "WebGL", "TypeScript"],
+    "cover": "/images/inkloop-game.png",
+    "featured": true,
+    "order": 0,
+    "project": {
+      "demoUrl": "https://xp-yang.github.io/games/inkloop/",
+      "demoMode": "Link",
+      "tech": ["TypeScript", "WebGL", "PWA"]
+    },
+    "blocks": [
+      {"id": "inkloop-intro", "type": "paragraph", "spans": [{"text": "一个可以直接在浏览器里玩的圈地游戏。电脑按住鼠标拖动，手机滑动底部控制区；安全回到领地，完成包围。支持多种 AI 策略、测试模式和本地对局日志。"}]}
+    ]
+  }
+]

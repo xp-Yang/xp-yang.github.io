@@ -1,7 +1,12 @@
 import snapshotJson from '@/content/content.json';
+import localProjects from '@/content/local-projects.json';
 import type { ContentItem, ContentSnapshot, ContentType } from '@/types/content';
 
-const snapshot = snapshotJson as ContentSnapshot;
+const localItems = localProjects as ContentItem[];
+const snapshot: ContentSnapshot = {
+  ...(snapshotJson as ContentSnapshot),
+  items: [...localItems, ...snapshotJson.items.filter(item => !localItems.some(local => local.id === item.id || (local.type === item.type && local.slug === item.slug))) as ContentItem[]],
+};
 
 export const contentLabels: Record<ContentType, { title: string; eyebrow: string; description: string }> = {
   Project: {

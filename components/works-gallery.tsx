@@ -105,6 +105,7 @@ export function WorksGallery({ items }: { items: ContentItem[] }) {
                 data-project-thumbnail
                 className={`work-thumbnail work-thumbnail-${(index % 11) + 1} relative aspect-[4/3] overflow-hidden transition-[filter,transform] duration-300 ease-out group-hover:scale-[0.985] group-hover:brightness-110 group-focus-visible:ring-2 group-focus-visible:ring-[#ff9f43] group-focus-visible:ring-offset-4 group-focus-visible:ring-offset-[#050608]`}
               >
+                {item.cover && <img src={item.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />}
                 {item.placeholder && (
                   <span className="absolute left-3 top-3 z-10 bg-black/55 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-stone-300 backdrop-blur-sm">
                     占位
@@ -141,6 +142,7 @@ export function WorksGallery({ items }: { items: ContentItem[] }) {
             borderRadius: opening.expanded ? 0 : 12,
           }}
         >
+          {opening.item.cover && <img src={opening.item.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />}
           <div
             className={`absolute inset-0 bg-[#050608]/45 transition-opacity duration-300 ${opening.expanded ? 'opacity-100 delay-200' : 'opacity-0'}`}
           />
