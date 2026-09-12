@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#e5e5f3">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="拼豆狂欢">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>拼豆狂欢</title>
+  <link rel="icon" href="assets/app-icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+  <main id="viewport" aria-label="拼豆狂欢">
+    <div id="game">
+      <canvas id="board" width="720" height="1280" aria-label="拼豆棋盘，点按豆子操作，拖动图案移动位置，滚轮或双指缩放，也可使用上方缩放与复位按钮" tabindex="0"></canvas>
+      <div id="controls"></div>
+      <div id="overlay"></div>
+      <div id="toast" role="status" aria-live="polite"></div>
+    </div>
+  </main>
+  <script type="module" src="src/app.js"></script>
+
+<script>if('serviceWorker' in navigator&&window.isSecureContext){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(e){console.warn('Offline cache unavailable',e);});});}</script>
+</body>
+</html>

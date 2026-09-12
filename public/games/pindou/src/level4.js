@@ -1,0 +1,68 @@
+// Extracted from the supplied second recording.
+export const level4 = {
+  "id": 4,
+  "name": "四色花",
+  "initial": [
+    "..GGGGG...GGG...",
+    ".GGGGGGG.GGYYY..",
+    ".GGGGGGGYYYYYYC.",
+    ".GGGGGGGYYYYYYCC",
+    ".GGGGGGGYYYYYYCC",
+    ".PCGGGGGRYYYRRRR",
+    "..CCCCCCCRRRRRR.",
+    "...CCCCCCCLLL...",
+    ".YYYYYLPCLLLLLL.",
+    "LLLLLLLPCLLLPPP.",
+    "LLLLLLLPCPPPPPP.",
+    "LLLLLLLPCPPPPP..",
+    ".PLLLLPPCCPPPP..",
+    "..PPPPPY.CCCC...",
+    ".......Y........",
+    "...ROO.Y..OOO...",
+    "...OOOOY.OODD...",
+    "....DDDYDDDDD...",
+    "......DYWWW.....",
+    ".......YW.......",
+    ".......Y........",
+    ".......Y........"
+  ],
+  "target": [
+    "..YYYYY...LLL...",
+    ".YYYYYYY.LLLLL..",
+    ".YYYYYYYLLLLLLG.",
+    ".YYYYYYYLLLLLLGG",
+    ".YYYYYYYLLLLLLGG",
+    ".OOYYYYYGLLLGGGG",
+    "..OOOOOWWGGGGGG.",
+    "...OOOOWWDCCC...",
+    ".PPPPPPRDCCCCCC.",
+    "PPPPPPPRDCCCCCC.",
+    "PPPPPPPRDCCCCCC.",
+    "PPPPPPPRDCCCCC..",
+    ".RPPPPRRDDCCCC..",
+    "..RRRRRL.DDDD...",
+    ".......L........",
+    "...GGG.L..GGG...",
+    "...GGGGL.GGGG...",
+    "....GGGLGGGGG...",
+    "......GLGGG.....",
+    ".......LG.......",
+    ".......L........",
+    ".......L........"
+  ],
+  "capacity": 36,
+  "timeLimit": 240,
+  "board": {
+    "x": 147,
+    "y": 230,
+    "pitch": 28.45,
+    "size": 25,
+    "assetBox": [
+      127,
+      210,
+      467,
+      624
+    ]
+  },
+  "source": "用户第二段录屏，0 秒初始排列、116 秒完成图案；原版第4关"
+};

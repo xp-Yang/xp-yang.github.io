@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { ProjectExperience } from '@/components/project-experience';
 import { InkloopExperience } from '@/components/inkloop-experience';
+import { PindouExperience } from '@/components/pindou-experience';
 import { createContentMetadata } from '@/lib/content-metadata';
 import { getContentByType, getContentItem } from '@/lib/content';
 
@@ -28,6 +29,7 @@ export default async function WorkDetailPage({
   const item = getContentItem('Project', slug);
   if (!item) notFound();
   if (slug === 'inkloop') return <InkloopExperience />;
+  if (slug === 'pindou') return <PindouExperience />;
   const projects = getContentByType('Project');
   const index = projects.findIndex((project) => project.slug === slug);
   return (
