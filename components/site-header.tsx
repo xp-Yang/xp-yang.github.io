@@ -24,7 +24,7 @@ export function SiteHeader() {
             <span className="size-1.5 rounded-full bg-[#ff9f43] shadow-[0_0_12px_#ff9f43]" />
           </span>
           <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-stone-300">
-            Event Horizon / 01
+            YANG.
           </span>
         </a>
 
