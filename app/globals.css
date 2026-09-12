@@ -1,0 +1,266 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-interface);
+  --font-mono: var(--font-code);
+  --font-heading: var(--font-interface);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root,
+.dark {
+  --background: #050608;
+  --foreground: #f4f1ea;
+  --card: #0b0d11;
+  --card-foreground: #f4f1ea;
+  --popover: #101319;
+  --popover-foreground: #f4f1ea;
+  --primary: #f4f1ea;
+  --primary-foreground: #08090b;
+  --secondary: #171a20;
+  --secondary-foreground: #ece8df;
+  --muted: #14171d;
+  --muted-foreground: #9299a6;
+  --accent: #ff9f43;
+  --accent-foreground: #130b04;
+  --destructive: #ef6a63;
+  --border: rgb(244 241 234 / 12%);
+  --input: rgb(244 241 234 / 14%);
+  --ring: #73b7ff;
+  --radius: 0.75rem;
+  --font-interface:
+    Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-literary: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  --font-code: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+    background: var(--background);
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    min-height: 100vh;
+    font-family: var(--font-interface);
+  }
+  ::selection {
+    color: #160c03;
+    background: #ffae5c;
+  }
+  a,
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .font-literary {
+    font-family: var(--font-literary);
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .site-shell {
+    width: min(100% - 2rem, 78rem);
+    margin-inline: auto;
+  }
+  .glass-panel {
+    background: linear-gradient(145deg, rgb(12 14 18 / 82%), rgb(7 8 11 / 68%));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 5%),
+      0 30px 80px rgb(0 0 0 / 22%);
+    backdrop-filter: blur(18px);
+  }
+  .eyebrow {
+    font-family: var(--font-code);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #a9b0bb;
+  }
+}
+
+.work-thumbnail {
+  background-color: #111316;
+  background-position: center;
+  background-size: cover;
+}
+
+.work-thumbnail::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 58%, rgb(0 0 0 / 34%));
+  pointer-events: none;
+}
+
+.work-thumbnail-1 {
+  background-image:
+    radial-gradient(
+      circle at 53% 49%,
+      #010203 0 9%,
+      #ffc17a 10%,
+      #e77732 12%,
+      #51200e 17%,
+      transparent 23%
+    ),
+    radial-gradient(
+      ellipse at 53% 50%,
+      transparent 0 17%,
+      rgb(227 118 50 / 88%) 19%,
+      transparent 28%
+    ),
+    radial-gradient(circle at 42% 42%, #38556d, #0d1014 48%, #040506 78%);
+}
+
+.work-thumbnail-2 {
+  background-image:
+    radial-gradient(circle at 28% 60%, rgb(230 140 71 / 90%), transparent 22%),
+    radial-gradient(circle at 70% 34%, rgb(65 116 145 / 90%), transparent 26%),
+    conic-gradient(from 30deg, #090b0d, #223340, #0a0c0f, #60331e, #090b0d);
+}
+
+.work-thumbnail-3 {
+  background-image:
+    repeating-linear-gradient(
+      92deg,
+      transparent 0 12%,
+      rgb(220 232 236 / 8%) 12.4% 13%,
+      transparent 13.4% 21%
+    ),
+    linear-gradient(145deg, #181d21, #704127 46%, #08090a 47%);
+}
+
+.work-thumbnail-4 {
+  background-image:
+    radial-gradient(circle at 30% 30%, #de8c51 0 2%, transparent 3%),
+    radial-gradient(circle at 65% 53%, #86a1ae 0 2%, transparent 3%),
+    radial-gradient(circle at 48% 70%, #cc683c 0 5%, transparent 6%),
+    linear-gradient(120deg, #101418, #273640);
+  background-size:
+    40px 40px,
+    58px 58px,
+    86px 86px,
+    auto;
+}
+
+.work-thumbnail-5 {
+  background-image: repeating-radial-gradient(
+    circle at 50% 50%,
+    transparent 0 10%,
+    rgb(229 140 71 / 55%) 10.5% 11%,
+    transparent 11.5% 18%
+  );
+}
+
+.work-thumbnail-6 {
+  background-image: conic-gradient(
+    from 160deg at 60% 40%,
+    #17252e,
+    #81513a,
+    #d59a68,
+    #14181c,
+    #38556d,
+    #17252e
+  );
+}
+
+.work-thumbnail-7 {
+  background-image:
+    radial-gradient(
+      ellipse at 50% 100%,
+      rgb(222 128 65 / 80%),
+      transparent 45%
+    ),
+    repeating-linear-gradient(
+      75deg,
+      rgb(255 255 255 / 9%) 0 1px,
+      transparent 1px 16px
+    );
+}
+
+.work-thumbnail-8 {
+  background-image:
+    repeating-radial-gradient(
+      ellipse at 18% 50%,
+      transparent 0 12px,
+      rgb(114 153 174 / 55%) 13px 14px,
+      transparent 15px 28px
+    ),
+    linear-gradient(90deg, #080a0c, #34241d);
+}
+
+.work-thumbnail-9 {
+  background-image:
+    linear-gradient(110deg, transparent 48%, #e58c47 49% 50%, transparent 51%),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 23px,
+      rgb(238 233 223 / 13%) 24px
+    );
+}
+
+.work-thumbnail-10 {
+  background-image:
+    radial-gradient(circle at 35% 50%, #76503c 0 18%, transparent 19%),
+    radial-gradient(circle at 65% 50%, #426074 0 18%, transparent 19%),
+    radial-gradient(circle at 50% 50%, #d5a275 0 9%, transparent 10%);
+}
+
+.work-thumbnail-11 {
+  background-image:
+    linear-gradient(
+      160deg,
+      transparent 43%,
+      rgb(230 140 71 / 65%) 44% 45%,
+      transparent 46%
+    ),
+    radial-gradient(ellipse at 70% 25%, #3e6378, transparent 24%),
+    radial-gradient(ellipse at 28% 72%, #683721, transparent 26%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
