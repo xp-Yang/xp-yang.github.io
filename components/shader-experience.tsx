@@ -29,7 +29,7 @@ export function ShaderExperience({ example }: { example: ShaderExample }) {
     const stage = stageRef.current;
     if (!canvas || !stage) return;
     let allocated: ReturnType<typeof createShaderRenderer> | undefined;
-    try { allocated = createShaderRenderer(canvas); allocated.load(shaderSource(example.path)); setError(''); }
+    try { allocated = createShaderRenderer(canvas); allocated.load(shaderSource(example.path), example.vertexPath ? shaderSource(example.vertexPath) : undefined); setError(''); }
     catch (cause) { allocated?.dispose(); console.error(cause); setError('此设备暂时无法运行这个 Shader，可通过源码入口查看。'); return; }
     const renderer = allocated;
     let frame = 0;
@@ -113,6 +113,7 @@ export function ShaderExperience({ example }: { example: ShaderExample }) {
       <footer className="space-y-2 border-t border-white/10 px-4 py-5 text-xs leading-6 text-stone-400 md:px-8">
         {notice && <p role="status">{notice}</p>}
         <p className="text-sm">{example.summary}</p>
+        {example.vertexPath && <p><a href="/shaders/pristineGrid.vs" target="_blank" rel="noreferrer" className="underline underline-offset-4">顶点 Shader 源码</a></p>}
         {example.credit && <p>{example.credit}{example.license && <> · <a className="underline underline-offset-4" href="https://creativecommons.org/licenses/by-nc-sa/3.0/" target="_blank" rel="noreferrer">{example.license}</a></>}</p>}
         <p className="font-mono text-[11px] text-stone-500">{example.path} · WebGL2 运行适配，保留仓库原始效果</p>
       </footer>

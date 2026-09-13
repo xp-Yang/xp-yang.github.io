@@ -24,7 +24,7 @@ export function ShaderGallery() {
         const example = shaderExamples[index++];
         if (!example) { renderer?.dispose(true); return; }
         try {
-          renderer!.load(shaderSource(example.path));
+          renderer!.load(shaderSource(example.path), example.vertexPath ? shaderSource(example.vertexPath) : undefined);
           const width = example.slug === 'virus' ? 240 : 400;
           const height = width * 0.75;
           renderer!.draw(width, height, example.time);

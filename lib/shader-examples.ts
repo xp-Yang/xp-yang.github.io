@@ -8,6 +8,8 @@ export type ShaderExample = {
   title: string;
   category: string;
   path: keyof typeof sources;
+  vertexPath?: keyof typeof sources;
+  sourceUrl?: string;
   summary: string;
   time: number;
   animated: boolean;
@@ -15,7 +17,7 @@ export type ShaderExample = {
   license?: string;
 };
 
-export const shaderExamples: ShaderExample[] = [
+const repositoryExamples: ShaderExample[] = [
   { slug: 'ocean', title: '海面', category: 'Simulation', path: 'shader2d/Simulation/ocean.glsl', summary: '程序化海浪、天空反射与海面光照。', time: 2, animated: true, credit: 'Seascape · Alexander Alekseev / TDM (2014)', license: 'CC BY-NC-SA 3.0' },
   { slug: 'beating-heart', title: '跳动的心', category: 'Simulation', path: 'shader2d/Simulation/beatingHeart.glsl', summary: '三十层旋转与波动叠加，形成红色的分形脉动。', time: 3.2, animated: true },
   { slug: 'halo', title: '光晕', category: 'Simulation', path: 'shader2d/Simulation/halo.glsl', summary: '三个颜色通道的相位偏移，构成波动的光点与光环。', time: 2.6, animated: true, credit: 'Danilo Guanabara · Shadertoy XsXXDn（原源码署名）' },
@@ -30,8 +32,13 @@ export const shaderExamples: ShaderExample[] = [
 ];
 
 export function shaderSourceUrl(example: ShaderExample) {
-  return `${SHADER_REPOSITORY}/blob/${SHADER_REVISION}/${example.path}`;
+  return example.sourceUrl ?? `${SHADER_REPOSITORY}/blob/${SHADER_REVISION}/${example.path}`;
 }
+
+export const shaderExamples: ShaderExample[] = [
+  ...repositoryExamples.slice().reverse(),
+  { slug: 'pristine-grid', title: '3D 抗锯齿网格', category: '3D / Grid', path: 'shader3d/pristineGrid.fs', vertexPath: 'shader3d/pristineGrid.vs', sourceUrl: '/shaders/pristineGrid.fs', summary: '相机反投影绘制的双层无限网格，保留红蓝坐标轴与屏幕空间抗锯齿。', time: 0, animated: false, credit: 'XPYEngine · pristineGrid.fs / pristineGrid.vs' },
+];
 
 // Expand the repository's relative includes without changing the source effects.
 export function shaderSource(path: string, chain: string[] = []): string {

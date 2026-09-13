@@ -1,3 +1,5 @@
+import { gridCamera, gridStageSource } from './grid-camera';
+
 const vertexSource = `#version 300 es
 in vec2 position;
 void main() { gl_Position = vec4(position, 0.0, 1.0); }`;
@@ -24,6 +26,9 @@ export function createShaderRenderer(canvas: HTMLCanvasElement) {
   let program: WebGLProgram | null = null;
   let uniforms: (WebGLUniformLocation | null)[] = [];
   let disposed = false;
+  let isGrid = false;
+  let viewUniform: WebGLUniformLocation | null = null;
+  let projectionUniform: WebGLUniformLocation | null = null;
   const buffer = gl.createBuffer();
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -42,19 +47,20 @@ export function createShaderRenderer(canvas: HTMLCanvasElement) {
     return shader;
   }
   return {
-    load(source: string) {
+    load(source: string, customVertex?: string) {
       if (disposed) return;
       if (program) gl.deleteProgram(program);
       program = null;
-      const vertex = compile(gl.VERTEX_SHADER, vertexSource);
+      isGrid = Boolean(customVertex);
+      const vertex = compile(gl.VERTEX_SHADER, customVertex ? gridStageSource(customVertex) : vertexSource);
       let fragment: WebGLShader;
-      try { fragment = compile(gl.FRAGMENT_SHADER, fragmentSource(source)); }
+      try { fragment = compile(gl.FRAGMENT_SHADER, isGrid ? gridStageSource(source) : fragmentSource(source)); }
       catch (error) { gl.deleteShader(vertex); throw error; }
       const next = gl.createProgram();
       if (!next) { gl.deleteShader(vertex); gl.deleteShader(fragment); throw new Error('无法创建 Shader 程序。'); }
       gl.attachShader(next, vertex);
       gl.attachShader(next, fragment);
-      gl.bindAttribLocation(next, 0, 'position');
+      gl.bindAttribLocation(next, 0, isGrid ? 'vertex_pos' : 'position');
       gl.linkProgram(next);
       gl.deleteShader(vertex);
       gl.deleteShader(fragment);
@@ -68,6 +74,8 @@ export function createShaderRenderer(canvas: HTMLCanvasElement) {
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       uniforms = ['iResolution', 'iTime', 'iMouse'].map(name => gl.getUniformLocation(next, name));
+      viewUniform = gl.getUniformLocation(next, 'view');
+      projectionUniform = gl.getUniformLocation(next, 'proj');
     },
     draw(width: number, height: number, time: number, mouse: number[] = [0, 0, 0, 0]) {
       if (disposed || !program || gl.isContextLost()) return;
@@ -75,6 +83,19 @@ export function createShaderRenderer(canvas: HTMLCanvasElement) {
       if (canvas.height !== height) canvas.height = height;
       gl.viewport(0, 0, width, height);
       gl.useProgram(program);
+      if (isGrid) {
+        const camera = gridCamera(width / height);
+        gl.uniformMatrix4fv(viewUniform, false, camera.view);
+        gl.uniformMatrix4fv(projectionUniform, false, camera.projection);
+        // The desktop grid outputs coverage in alpha; composite over the
+        // viewport background instead of discarding that coverage.
+        gl.clearColor(0.025, 0.03, 0.04, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.enable(gl.BLEND);
+        gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      } else {
+        gl.disable(gl.BLEND);
+      }
       gl.uniform3f(uniforms[0], width, height, 1);
       gl.uniform1f(uniforms[1], time);
       gl.uniform4f(uniforms[2], mouse[0], mouse[1], mouse[2], mouse[3]);
