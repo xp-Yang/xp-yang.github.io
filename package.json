@@ -7,8 +7,8 @@
   },
   "scripts": {
     "dev": "vinext dev",
-    "build": "vinext build && tsx scripts/generate-static-rss.ts",
-    "start": "wrangler dev --config dist/server/wrangler.json",
+    "build": "vinext build && tsx scripts/generate-static-rss.ts && tsx scripts/verify-static-assets.ts",
+    "start": "tsx scripts/serve-static.ts",
     "content:sync": "tsx scripts/sync-notion.ts",
     "test": "tsx --test tests/**/*.test.ts",
     "lint": "oxlint",

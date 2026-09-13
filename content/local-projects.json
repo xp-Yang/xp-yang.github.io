@@ -1,5 +1,42 @@
 [
   {
+    "id": "project-gcode-preview",
+    "slug": "gcode-preview",
+    "type": "Project",
+    "title": "GCode 走线预览",
+    "summary": "一层一层，看见成形。将 XPYEngine 的三维走线预览带到浏览器，打开 GCode，探索每一层、每一道挤出轨迹。",
+    "publishedAt": "2026-09-13",
+    "tags": [
+      "WebGL",
+      "3D Printing",
+      "TypeScript"
+    ],
+    "cover": "/images/gcode-preview.png",
+    "featured": true,
+    "order": -1,
+    "project": {
+      "demoUrl": "https://xp-yang.github.io/works/gcode-preview/",
+      "demoMode": "Link",
+      "sourceUrl": "https://github.com/xp-Yang/XPYEngine",
+      "tech": [
+        "Three.js",
+        "GCode",
+        "Web Worker"
+      ]
+    },
+    "blocks": [
+      {
+        "id": "gcode-intro",
+        "type": "paragraph",
+        "spans": [
+          {
+            "text": "源于 XPYEngine 的 GCode 预览实验。保留有厚度的挤出轨迹、类型配色、层范围和最高层步进，优先兼容 Bambu Studio 与 OrcaSlicer 的文本 GCode。文件仅在当前浏览器中处理。"
+          }
+        ]
+      }
+    ]
+  },
+  {
     "id": "project-inkloop",
     "slug": "inkloop",
     "type": "Project",
