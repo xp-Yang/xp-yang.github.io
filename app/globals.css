@@ -113,6 +113,30 @@
   }
 }
 
+/* Site interaction policy: arrow everywhere except actionable controls.
+   Keep these overrides scoped to content; native browser chrome is untouched. */
+html, body, body *, body *::before, body *::after {
+  cursor: default !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+body :is(a[href], button, summary, select, label[for], label:has(input),
+  input[type='button'], input[type='submit'], input[type='reset'],
+  input[type='checkbox'], input[type='radio'], input[type='range'], input[type='file'],
+  [role='button'], [role='link'], [role='tab'], [role='checkbox'], [role='radio'],
+  [role='switch'], [role='menuitem'], [role='option'], [role='slider'], .cursor-pointer),
+body :is(a[href], button, summary, select, label[for], label:has(input),
+  [role='button'], [role='link'], [role='tab'], [role='checkbox'], [role='radio'],
+  [role='switch'], [role='menuitem'], [role='option'], [role='slider'], .cursor-pointer) * {
+  cursor: pointer !important;
+}
+html body :is(:disabled, [aria-disabled='true'], [data-disabled='true']),
+html body :is(:disabled, [aria-disabled='true'], [data-disabled='true']) * {
+  cursor: default !important;
+}
+body *::before, body *::after { cursor: inherit !important; }
+body :is(a, img) { -webkit-user-drag: none; }
+
 /* Reserve the same viewport width on both short and long pages. Scrolling,
    dragging and keyboard interaction are entirely browser-native. */
 html {

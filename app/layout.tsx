@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { SiteHeader } from '@/components/site-header';
+import { InteractionPolicy } from '@/components/interaction-policy';
 import { siteConfig } from '@/site.config';
 
 import './globals.css';
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <a href="#main-content" className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-full bg-white px-4 py-2 text-sm text-black transition-transform focus:translate-y-0">跳到主要内容</a>
         <SiteHeader />
         <div id="main-content">{children}</div>
+        <InteractionPolicy />
       </body>
     </html>
   );
