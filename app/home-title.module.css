@@ -1,0 +1,12 @@
+@font-face {
+  font-family: 'Outfit Home';
+  src: url('/fonts/outfit-500.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+.name {
+  font-family: 'Outfit Home', sans-serif;
+  letter-spacing: 0.14em;
+}
