@@ -9,7 +9,7 @@ export const defaultProfile = () => ({version:1,levelOrder:2,unlocked:1,unlocked
 export function isLevelUnlocked(profile,id){return Array.isArray(profile.unlockedLevels)?profile.unlockedLevels.includes(id):id<=profile.unlocked;}
 export function createSession(level, runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`) {
   const rules=trayRules(level);
-  return {levelId:level.id,runId,trayVersion:3,trayStep:rules.expansion,maxTrayCapacity:rules.maxCapacity,board:level.initial.flatMap(row=>[...row].map(c=>c==='.'?undefined:c)),tray:Array(rules.capacity).fill(null),remaining:level.timeLimit,status:'playing',selection:null,expanded:0,tutorialStep:0};
+  return {levelId:level.id,runId,trayVersion:4,trayStep:rules.expansion,maxTrayCapacity:rules.maxCapacity,board:level.initial.flatMap(row=>[...row].map(c=>c==='.'?undefined:c)),tray:Array(rules.capacity).fill(null),remaining:level.timeLimit,status:'playing',selection:null,expanded:0,tutorialStep:0};
 }
 export function targetAt(level, index) {return level.target[Math.floor(index / level.target[0].length)]?.[index % level.target[0].length];}
 export function locked(level, state, index) {return state.board[index] != null && state.board[index]===targetAt(level,index);}
@@ -106,7 +106,7 @@ export function validSession(level,s){
   const rules=trayRules(level),legacy=Number.isInteger(s.legacyTrayCapacity)&&s.legacyTrayCapacity>rules.maxCapacity&&s.legacyTrayCapacity===s.tray?.length;
   const expectedLength=legacy?s.legacyTrayCapacity:Math.min(rules.maxCapacity,rules.capacity+s.expanded*rules.expansion);
   const expectedMaximum=legacy?s.legacyTrayCapacity:rules.maxCapacity;
-  if(!s||s.levelId!==level.id||typeof s.runId!=='string'||!Array.isArray(s.board)||s.board.length!==level.target.length*level.target[0].length||!Array.isArray(s.tray)||!Number.isInteger(s.expanded)||s.expanded<0||s.expanded>rules.maxExpansions||s.tray.length!==expectedLength||s.trayVersion===3&&(s.trayStep!==rules.expansion||s.maxTrayCapacity!==expectedMaximum)||!['playing','won','lost'].includes(s.status)||!Number.isFinite(s.remaining)||s.remaining<0||s.remaining>level.timeLimit)return false;
+  if(!s||s.levelId!==level.id||typeof s.runId!=='string'||!Array.isArray(s.board)||s.board.length!==level.target.length*level.target[0].length||!Array.isArray(s.tray)||!Number.isInteger(s.expanded)||s.expanded<0||s.expanded>rules.maxExpansions||s.tray.length!==expectedLength||s.trayVersion===4&&(s.trayStep!==rules.expansion||s.maxTrayCapacity!==expectedMaximum)||!['playing','won','lost'].includes(s.status)||!Number.isFinite(s.remaining)||s.remaining<0||s.remaining>level.timeLimit)return false;
   const expected={},actual={};
   for(const row of level.target)for(const c of row)if(c!=='.')expected[c]=(expected[c]||0)+1;
   for(let i=0;i<s.board.length;i++){
@@ -117,8 +117,9 @@ export function validSession(level,s){
   return Object.keys(expected).every(c=>expected[c]===actual[c])&&(s.status!=='won'||isComplete(level,s));
 }
 function upgradeTray(level,state){
-  if(state.trayVersion===3)return;
   const rules=trayRules(level),beads=state.tray.filter(color=>color!=null);
+  const expectedMaximum=Number.isInteger(state.legacyTrayCapacity)?state.legacyTrayCapacity:rules.maxCapacity;
+  if(state.trayVersion===4&&state.trayStep===rules.expansion&&state.maxTrayCapacity===expectedMaximum)return;
   const preservedExpansions=Math.max(0,Math.min(rules.maxExpansions,Number.isInteger(state.expanded)?state.expanded:0));
   let length=Math.max(rules.capacity+preservedExpansions*rules.expansion,Math.ceil(beads.length/rules.expansion)*rules.expansion);
   length=Math.max(rules.capacity,length);
@@ -126,7 +127,7 @@ function upgradeTray(level,state){
   if(length>rules.maxCapacity){state.legacyTrayCapacity=length;state.expanded=rules.maxExpansions;}
   else delete state.legacyTrayCapacity;
   state.tray=[...beads,...Array(length-beads.length).fill(null)];
-  state.trayVersion=3;state.trayStep=rules.expansion;state.maxTrayCapacity=state.legacyTrayCapacity||rules.maxCapacity;
+  state.trayVersion=4;state.trayStep=rules.expansion;state.maxTrayCapacity=state.legacyTrayCapacity||rules.maxCapacity;
 }
 function restoreSplitColors(level,state){
   for(const split of level.colorSplits||[]){

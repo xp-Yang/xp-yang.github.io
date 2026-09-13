@@ -17,7 +17,7 @@ export function layout(level,state){
   const traySlotSize=compact?COMPACT_TRAY_SLOT_SIZE:TRAY_SLOT_SIZE,trayBeadSize=compact?COMPACT_TRAY_BEAD_SIZE:TRAY_BEAD_SIZE;
   const trayPitchY=compact?traySlotSize+COMPACT_TRAY_GAP:TRAY_PITCH_Y,padding=compact?10:12;
   const outerMargin=12,expandGap=8,trayWidth=720-outerMargin*2-expandGap-TRAY_EXPAND_WIDTH,innerWidth=trayWidth-padding*2;
-  const minimumGap=compact?2:6,maxCols=Math.max(1,Math.floor((innerWidth+minimumGap)/(traySlotSize+minimumGap)));
+  const minimumGap=compact?2:6,maxCols=18;
   const cols=Math.min(maxCols,state.tray.length),rows=Math.ceil(state.tray.length/cols);
   const trayPitchX=cols>1?(innerWidth-traySlotSize)/(cols-1):0;
   const trayHeight=Math.max(48,(rows-1)*trayPitchY+traySlotSize+padding*2),trayBottom=1264,trayTop=trayBottom-trayHeight;

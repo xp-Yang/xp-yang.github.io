@@ -87,12 +87,13 @@ const recordedLevels = [
   }
 ];
 export function initialTrayCapacity(level){
+  if(level.id===9)return 18*10;
   const beads=level.target.reduce((count,row)=>count+[...row].filter(color=>color!=='.').length,0);
   const sixth=beads/6;
-  return sixth<24?12:Math.ceil(sixth/12)*12;
+  return sixth<18?18:Math.ceil(sixth/18)*18;
 }
 function withTrayRules(level){
-  const trayColumns=level.id===9?24:12;
-  return {...level,capacity:initialTrayCapacity(level),trayColumns,trayExpansion:trayColumns,trayMaxExpansions:level.id===9?8:2};
+  const trayColumns=18;
+  return {...level,capacity:initialTrayCapacity(level),trayColumns,trayExpansion:trayColumns,trayMaxExpansions:level.id===9?4:2};
 }
 export const levels = [...recordedLevels,level3,level4,level8,level9,...chartLevels].sort((a,b)=>a.id-b.id).map(withTrayRules);
