@@ -130,7 +130,7 @@
     z-index: 90;
     touch-action: none;
     user-select: none;
-    cursor: pointer;
+    cursor: default;
     visibility: hidden;
   }
   .site-scrollbar[data-visible='true'] { visibility: visible; }
@@ -149,8 +149,7 @@
   .site-scrollbar:hover .site-scrollbar-thumb,
   .site-scrollbar:focus-visible .site-scrollbar-thumb,
   .site-scrollbar[data-dragging='true'] .site-scrollbar-thumb { opacity: 1; width: 6px; background: #b6bdc7; }
-  .site-scrollbar:focus-visible { outline: 1px solid #73b7ff; outline-offset: 0; border-radius: 12px; }
-  .site-scrollbar[data-dragging='true'] { cursor: grabbing; }
+  .site-scrollbar:focus { outline: none; }
 }
 
 .work-thumbnail {
