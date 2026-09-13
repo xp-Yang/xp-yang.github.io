@@ -56,7 +56,7 @@ export const chartLevels = [
       "..UUAAAAAAAAAAAA..",
       "..AAAAAAAAAAAAAA.."
     ],
-    "capacity": 36,
+    "capacity": 48,
     "timeLimit": 300,
     "board": {
       "x": 161.66666666666669,
@@ -122,7 +122,7 @@ export const chartLevels = [
       "..EEEEEEEEEEEEEE.",
       "....EEEEEEEEE...."
     ],
-    "capacity": 36,
+    "capacity": 48,
     "timeLimit": 300,
     "board": {
       "x": 156.36363636363637,
@@ -198,7 +198,7 @@ export const chartLevels = [
       "..........EE..........",
       "..........EEE........."
     ],
-    "capacity": 36,
+    "capacity": 48,
     "timeLimit": 300,
     "board": {
       "x": 142.22222222222223,

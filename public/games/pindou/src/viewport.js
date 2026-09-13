@@ -1,4 +1,7 @@
-export const BOARD_TOP=210;
+export const BOARD_TOP=160;
+export const TRAY_SLOT_SIZE=39/2,TRAY_BEAD_SIZE=36/2;
+export const TRAY_GAP_X=(52.5-39)/4,TRAY_GAP_Y=(68-39)/4;
+export const TRAY_PITCH_X=TRAY_SLOT_SIZE+TRAY_GAP_X,TRAY_PITCH_Y=TRAY_SLOT_SIZE+TRAY_GAP_Y;
 const geometryCache=new WeakMap();
 export function geometry(level){
   if(geometryCache.has(level))return geometryCache.get(level);
@@ -8,13 +11,19 @@ export function geometry(level){
   geometryCache.set(level,result);return result;
 }
 export function layout(level,state){
-  const rows=Math.ceil(state.tray.length/12),trayTop=965-(rows-1)*68;
-  const bottom=level.board.y+(level.target.length-1)*level.board.pitch+level.board.pitch/2+8;
-  const fit=state.expanded?Math.min(1,(trayTop-15-BOARD_TOP)/(bottom-BOARD_TOP)):1;
+  const cols=Math.min(24,state.tray.length),rows=Math.ceil(state.tray.length/cols);
+  const trayWidth=(cols-1)*TRAY_PITCH_X+TRAY_SLOT_SIZE+24;
+  const trayHeight=Math.max(48,(rows-1)*TRAY_PITCH_Y+TRAY_SLOT_SIZE+24),trayBottom=1264,trayTop=trayBottom-trayHeight;
+  const trayLeft=(720-trayWidth-72)/2,trayX=trayLeft+12+TRAY_SLOT_SIZE/2,trayY=trayTop+12+TRAY_SLOT_SIZE/2;
+  const bounds=geometry(level),worldCenterX=(bounds.left+bounds.right)/2,worldCenterY=(bounds.top+bounds.bottom)/2;
+  const centerX=360,centerY=(BOARD_TOP+trayTop)/2;
+  const fit=Math.min(680/(bounds.right-bounds.left+level.board.pitch+18),(trayTop-BOARD_TOP-40)/(bounds.bottom-bounds.top+level.board.pitch+18));
   const raw=state.viewport||{},zoom=Number.isFinite(raw.zoom)?Math.max(.5,Math.min(level.maxZoom||3,raw.zoom)):1;
   const x=Number.isFinite(raw.x)?raw.x:0,y=Number.isFinite(raw.y)?raw.y:0,scale=fit*zoom;
-  return {trayTop,rows,scale,zoom,x,y,boardY:v=>BOARD_TOP+(v-BOARD_TOP)*scale+y,boardX:v=>360+(v-360)*scale+x,
-    worldX:v=>360+(v-360-x)/scale,worldY:v=>BOARD_TOP+(v-BOARD_TOP-y)/scale};
+  return {trayTop,trayBottom,trayLeft,trayWidth,trayHeight,trayX,trayY,cols,rows,centerX,centerY,scale,zoom,x,y,
+    expandX:trayLeft+trayWidth+10,expandY:trayTop+(trayHeight-44)/2,
+    boardY:v=>centerY+(v-worldCenterY)*scale+y,boardX:v=>centerX+(v-worldCenterX)*scale+x,
+    worldX:v=>worldCenterX+(v-centerX-x)/scale,worldY:v=>worldCenterY+(v-centerY-y)/scale};
 }
 export function inBoardArea(level,state,p){return p.x>=0&&p.x<=720&&p.y>=BOARD_TOP&&p.y<layout(level,state).trayTop;}
 function constrain(level,state){
@@ -22,14 +31,23 @@ function constrain(level,state){
   const pad=level.board.pitch*l.scale/2;
   const left=l.boardX(bounds.left)-pad,right=l.boardX(bounds.right)+pad;
   const top=l.boardY(bounds.top)-pad,bottom=l.boardY(bounds.bottom)+pad;
-  const dx=right<80?80-right:left>640?640-left:0;
-  const dy=bottom<BOARD_TOP+80?BOARD_TOP+80-bottom:top>l.trayTop-80?l.trayTop-80-top:0;
+  let dx=right<80?80-right:left>640?640-left:0;
+  let dy=bottom<BOARD_TOP+80?BOARD_TOP+80-bottom:top>l.trayTop-80?l.trayTop-80-top:0;
+  // Irregular patterns may have empty bounding-box corners. Keep an actual bead reachable.
+  if(dx||dy){
+  const moved=bounds.cells.map(p=>({x:l.boardX(p.x)+dx,y:l.boardY(p.y)+dy}));
+  if(!moved.some(p=>p.x>=20&&p.x<=700&&p.y>=BOARD_TOP+20&&p.y<=l.trayTop-20)){
+    let closest=null,distance=Infinity;
+    for(const p of moved){const x=Math.max(40,Math.min(680,p.x))-p.x,y=Math.max(BOARD_TOP+40,Math.min(l.trayTop-40,p.y))-p.y,d=x*x+y*y;if(d<distance){distance=d;closest={x,y};}}
+    if(closest){dx+=closest.x;dy+=closest.y;}
+  }
+  }
   state.viewport={zoom:l.zoom,x:l.x+dx,y:l.y+dy};
 }
 export function panBoard(level,state,dx,dy){const l=layout(level,state);state.viewport={zoom:l.zoom,x:l.x+dx,y:l.y+dy};constrain(level,state);}
 export function zoomBoard(level,state,factor,anchor,destination=anchor){
   const l=layout(level,state),zoom=Math.max(.5,Math.min(level.maxZoom||3,l.zoom*factor)),ratio=zoom/l.zoom;
-  state.viewport={zoom,x:destination.x-360-(anchor.x-360-l.x)*ratio,y:destination.y-BOARD_TOP-(anchor.y-BOARD_TOP-l.y)*ratio};constrain(level,state);
+  state.viewport={zoom,x:destination.x-l.centerX-(anchor.x-l.centerX-l.x)*ratio,y:destination.y-l.centerY-(anchor.y-l.centerY-l.y)*ratio};constrain(level,state);
 }
 export function resetBoard(state){delete state.viewport;}
 

@@ -34,7 +34,7 @@ export const level8 = {
     "TTTT..........",
     "TT............"
   ],
-  "capacity": 36,
+  "capacity": 48,
   "timeLimit": 300,
   "board": {
     "x": 126,

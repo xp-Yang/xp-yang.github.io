@@ -75,7 +75,7 @@ const recordedLevels = [
       ".......YYYYYYYYY.",
       ".........YYYYY..."
     ],
-    "capacity": 36,
+    "capacity": 48,
     "timeLimit": 300,
     "board": {
       "x": 76.5,

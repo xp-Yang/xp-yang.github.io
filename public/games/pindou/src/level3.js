@@ -54,7 +54,7 @@ export const level3 = {
     "....IIIII....",
     "....IIIII...."
   ],
-  "capacity": 36,
+  "capacity": 48,
   "timeLimit": 300,
   "board": {
     "x": 222,

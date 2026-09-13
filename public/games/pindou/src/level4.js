@@ -50,7 +50,7 @@ export const level4 = {
     ".......L........",
     ".......L........"
   ],
-  "capacity": 36,
+  "capacity": 48,
   "timeLimit": 240,
   "board": {
     "x": 147,

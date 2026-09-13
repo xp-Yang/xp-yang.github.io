@@ -1,7 +1,7 @@
 import {levels} from './levels.js';
 export const ASSET_GROUPS={
   home:['settings','energy','coin','close','start-button','free',...levels.map(l=>'pattern-'+l.id)],
-  game:['background','settings','trophy','clock','pin','locked-tools','expand','hand'],
+  game:['background','settings','trophy','clock','hand'],
   settlement:['win-title','rewards','double-button','pig','entry-dialog'],
   loading:['load']
 };
