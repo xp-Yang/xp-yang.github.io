@@ -7,27 +7,26 @@ import {layout,bindBoardGestures} from './viewport.js';
 import {canvasResolution} from './quality.js';
 import {fitMobileViewport} from './mobile.js';
 import {createSoundPlayer} from './sound.js';
-import {isLocalGame,TEST_MODE_KEY,TEST_SAVE_KEY} from './test-mode.js';
+import {TEST_MODE_KEY,TEST_SAVE_KEY} from './test-mode.js';
 import {selectionMatches,autoTopology} from './staged-auto.js';
 import {createAutoPlayback} from './auto-playback.js';
 import {streamAutoPlans} from './refill-auto.js';
 
 const canvas=document.querySelector('#board'),ctx=canvas.getContext('2d'),overlay=document.querySelector('#overlay'),controls=document.querySelector('#controls'),game=document.querySelector('#game');
 let storage;try{storage=window.pindouStorage||localStorage;}catch{storage={getItem:()=>null,setItem:()=>{throw Error('unavailable');}};}
-const testAvailable=isLocalGame(window.location);
-let testMode=false;try{testMode=testAvailable&&storage.getItem(TEST_MODE_KEY)==='true';}catch{}
+let testMode=false;try{testMode=storage.getItem(TEST_MODE_KEY)==='true';}catch{}
 function profileStore(){return {getItem:()=>storage.getItem(testMode?TEST_SAVE_KEY:SAVE_KEY)};}
 let profile=readProfile(profileStore(),levels);
 let autoRunning=false,autoPlan=null,autoAt=0,autoSteps=0,autoMessage='按真实步骤自动摆放';
 let autoSequence=null,autoPlanning=false,autoWorker=null,autoVersion=0,autoComplete=false;
 let autoPlayback=null,autoTiming=null;
 const unlocked=id=>testMode||isLevelUnlocked(profile,id);
-let state=profile.session,level=levels.find(l=>l.id===state?.levelId)||levels[0],assets=assetLoader.loaded,screen='home',modal=null,busy=false,flights=[],sparkles=[],lastSave=0,toastTimer,saveWarning=false,wonAt=0,homeContent='',entryShown=false,queuedTap=null,lastSerialized=null,retryLoad=null;
+let state=profile.session,level=levels.find(l=>l.id===state?.levelId)||levels[0],assets=assetLoader.loaded,screen='home',modal=null,busy=false,flights=[],sparkles=[],lastSave=0,toastTimer,saveWarning=false,wonAt=0,homeContent='',celebratedRun=null,celebrationTimer=null,queuedTap=null,lastSerialized=null,retryLoad=null;
 const renderer=createRenderer(ctx),activeClock=createActiveClock(),loadVersion=createLatestLoad();
 const scheduler=createScheduler(tick),saver=createSaveQueue(writeSave);
 function playing(){return screen==='play'&&!modal&&!document.hidden&&!window.pindouNativePaused&&state?.status==='playing';}
-function syncTime(){const seconds=activeClock.sample(playing()&&!autoRunning);if(seconds&&state?.status==='playing'){elapse(state,seconds);if(state.status==='lost'){queuedTap=null;flights=[];sparkles=[];busy=false;showLoss();}}}
-function wake(){activeClock.reset(playing()&&!autoRunning);autoPlayback?.sample(performance.now(),playing());if(screen==='play'&&!modal&&!document.hidden)scheduler.request();else scheduler.stop();}
+function syncTime(){const seconds=activeClock.sample(playing());if(seconds&&state?.status==='playing'){elapse(state,seconds);if(state.status==='lost'){queuedTap=null;flights=[];sparkles=[];busy=false;showLoss();}}}
+function wake(){activeClock.reset(playing());autoPlayback?.sample(performance.now(),playing());if(screen==='play'&&!modal&&!document.hidden)scheduler.request();else scheduler.stop();}
 const audio=createSoundPlayer(()=>profile.sound);
 for(const event of ['pointerdown','touchend','keydown'])window.addEventListener(event,audio.unlock,{capture:true,passive:true});
 function sound(name){audio.play(name);}
@@ -36,11 +35,11 @@ function writeSave(){syncTime();profile.session=state;lastSave=performance.now()
 function save(){saver.flush();}
 function resize(){syncTime();const viewport=document.querySelector('#viewport'),visual=window.visualViewport,width=visual?.width||window.innerWidth,height=visual?.height||window.innerHeight;viewport.style.height=`${height}px`;const css=window.getComputedStyle(viewport),insets={left:parseFloat(css.paddingLeft),right:parseFloat(css.paddingRight),top:parseFloat(css.paddingTop),bottom:parseFloat(css.paddingBottom)};const {scale}=fitMobileViewport(width,height,insets);game.style.setProperty('--scale',scale);const resolution=canvasResolution(scale,window.devicePixelRatio||1);if(canvas.width!==resolution.width||canvas.height!==resolution.height){canvas.width=resolution.width;canvas.height=resolution.height;renderer.dispose();}ctx.setTransform(canvas.width/720,0,0,canvas.height/1280,0,0);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';wake();}
 window.addEventListener('resize',resize);window.visualViewport?.addEventListener('resize',resize);resize();
-function imageButton(action,name,cls,label){if(action==='next')return '<button type="button" class="blue next choose-levels" data-action="next">选择关卡</button>';return `<button type="button" class="image-button ${cls}" data-action="${action}" aria-label="${label}"><img src="assets/${name}.png" alt="${label}" draggable="false"></button>`;}
+function imageButton(action,name,cls,label){return `<button type="button" class="image-button ${cls}" data-action="${action}" aria-label="${label}"><img src="assets/${name}.png" alt="${label}" draggable="false"></button>`;}
 function balances(){return `<div class="balances"><div class="energy-value" aria-label="体力 ${profile.energy}"><span>${profile.energy}/100</span></div><div class="coin-value"><img src="assets/coin.png" alt="金币">${profile.coins}</div></div>`;}
 function panel(title,content,cls=''){return `<div class="veil"><section class="panel ${cls}" role="dialog" aria-modal="true" aria-label="${title}"><h1 class="panel-title">${title}</h1><button class="close" data-action="close" aria-label="关闭"></button>${content}</section></div>`;}
 function setModal(name,html){syncTime();stopAuto();queuedTap=null;if(name!=='loading')loadVersion.cancel();modal=name;overlay.innerHTML=(screen==='home'?homeContent.replace('<div class="home">','<div class="home" inert>'):'')+html;wake();requestAnimationFrame(()=>overlay.querySelector('[role="dialog"] button')?.focus({preventScroll:true}));}
-function clearModal(){syncTime();loadVersion.cancel();modal=null;overlay.innerHTML='';if(screen==='home')showHome();wake();}
+function clearModal(){syncTime();loadVersion.cancel();modal=null;overlay.innerHTML='';if(screen==='home')showHome();else if(state?.status==='won'&&!wonAt)showWin();wake();}
 function withAssets(group,commit){
   const token=loadVersion.begin();queuedTap=null;retryLoad=()=>withAssets(group,commit);
   if(assetLoader.ready(group)){commit();return;}
@@ -52,22 +51,22 @@ function withAssets(group,commit){
 }
 function baseControls(){
   const l=layout(level,state);
+  const finished=state.status==='won';
   controls.innerHTML='<button class="hotspot" style="left:10px;top:17px;width:64px;height:58px" data-action="settings" aria-label="设置"></button>'+
-    '<button class="tray-expand" data-action="expand" aria-label="加仓，增加十二格暂存空间" style="left:'+l.expandX+'px;top:'+l.expandY+'px" '+(!canExpandTray(state)?'disabled':'')+'><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button>'+
-    (testMode?'<button class="auto-play-top" data-action="auto-play">一键自动通关</button>':'');
+    (finished?'':'<button class="tray-expand" data-action="expand" aria-label="加仓，增加十二格暂存空间" style="left:'+l.expandX+'px;top:'+l.expandY+'px" '+(!canExpandTray(state)?'disabled':'')+'><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button>')+
+    (testMode&&!finished?'<button class="auto-play-floating" data-action="auto-play">一键自动通关</button>':'');
   updateTestControls();
 }
 function startLevel(id,resume=false){
   stopAuto();autoSteps=0;autoMessage='按真实步骤自动摆放';
   const selectedLevel=levels.find(l=>l.id===id);if(!selectedLevel||!unlocked(id))return;
   withAssets('game',()=>{
-    syncTime();level=selectedLevel;
+    syncTime();clearCelebration();wonAt=0;level=selectedLevel;
     if(!resume){state=createSession(level);state.tutorialStep=id===1&&!profile.tutorialDone?0:6;}
     profile.currentLevel=id;flights=[];sparkles=[];queuedTap=null;busy=false;screen='play';renderer.dispose();save();baseControls();clearModal();
-    assetLoader.load('settlement').catch(()=>{});
   });
 }
-function showSettings(){setModal('settings',panel('设置',`<div class="settings-list"><label>游戏音效<input data-setting="sound" type="checkbox" ${profile.sound?'checked':''}></label>${testAvailable?`<label>本地测试模式<input data-setting="test-mode" type="checkbox" ${testMode?'checked':''}></label>`:''}</div><button class="blue" data-action="close">${screen==='home'?'返回选关':'继续游戏'}</button>${screen==='play'?'<button class="yellow" data-action="home">返回选关主页</button><button class="secondary" data-action="restart">重新开始本关</button>':''}`));}
+function showSettings(){setModal('settings',panel('设置',`<div class="settings-list"><label>游戏音效<input data-setting="sound" type="checkbox" ${profile.sound?'checked':''}></label><label>测试模式<input data-setting="test-mode" type="checkbox" ${testMode?'checked':''}></label></div><button class="blue" data-action="close">${screen==='home'?'返回选关':'继续游戏'}</button>${screen==='play'?'<button class="yellow" data-action="home">返回选关主页</button><button class="secondary" data-action="restart">重新开始本关</button>':''}`));}
 function showLevels(){showHome();}
 function canResume(id){return state?.levelId===id&&state.status==='playing'&&state.remaining<level.timeLimit;}
 function showPreview(id){
@@ -76,7 +75,7 @@ function showPreview(id){
   setModal('preview',panel(`第 ${id} 关`,`<div class="picture"><img src="assets/pattern-${id}.png" alt="${l.name}"></div>${resume?`<button class="blue resume-game" data-action="resume-${id}">继续本关</button><button class="secondary" data-action="start-${id}">重新开始</button>`:`<img class="free" src="assets/free.png" alt="免费">${imageButton('start-'+id,'start-button','start','开始游戏')}`}`,'preview'));
 }
 function showHome(){
-  syncTime();stopAuto();loadVersion.cancel();queuedTap=null;
+  syncTime();stopAuto();clearCelebration();loadVersion.cancel();queuedTap=null;
   if(state?.status==='won')award(1);
   screen='home';modal=null;busy=false;flights=[];sparkles=[];wonAt=0;controls.innerHTML='';save();
   homeContent=`<div class="home">
@@ -96,18 +95,18 @@ function showHome(){
   overlay.innerHTML=homeContent;
   renderer.dispose();wake();
 }
-function confetti(){const colors=['#fff3b2','#e1faff','#ffbef0','#a5ffd1','#cec4ff'];return `<div class="confetti">${Array.from({length:65},(_,i)=>`<i style="--x:${(i*173)%720}px;--w:${10+i%15}px;--h:${8+i%20}px;--color:${colors[i%5]};--duration:${3+i%4}s;--delay:-${(i*.173)%5}s;--drift:${(i%2?1:-1)*(30+i%70)}px"></i>`).join('')}</div>`;}
-function showWin(){withAssets('settlement',renderWin);}
-function renderWin(){
-  sound('win');const claimed=profile.claimed.includes(state.runId),current=profile.streak+(claimed?0:1),best=Math.max(profile.bestStreak,current);
-  setModal('win',`<div class="veil"></div>${balances()}<section class="win" role="dialog" aria-modal="true" aria-label="恭喜过关"><img class="heading" src="assets/win-title.png" alt="恭喜过关"><button class="close" data-action="finish-home" aria-label="领取奖励并返回主页"></button><div class="art"><img src="assets/pattern-${level.id}.png" alt="完成的图案"></div><div class="streak"><span>当前连胜：${current}</span><span>最高连胜：${best}</span></div><div class="reward-label">奖励</div><img class="rewards" src="assets/rewards.png" alt="金币十、体力五、拼图一">${imageButton('double','double-button','double','双倍领取')}${imageButton('next','next-button','next','下一关')}${confetti()}</section>`);
-  if(claimed){const b=overlay.querySelector('[data-action="double"]');b.disabled=true;b.setAttribute('aria-label','奖励已领取');}
-  const pig=document.createElement('img');pig.src='assets/pig.png';pig.className='pig';pig.alt='存钱罐进度';overlay.querySelector('.win').append(pig);
-  if(level.id===1&&!profile.tutorialDone&&!entryShown){entryShown=true;showEntry();}
-}
-function showEntry(){
-  queuedTap=null;
-  modal='entry';const wrapper=document.createElement('div');wrapper.className='entry-wrap';wrapper.innerHTML='<div class="entry-dim"></div><section class="entry-dialog" role="dialog" aria-label="入口有奖" aria-modal="true"><img src="assets/entry-dialog.png" alt="入口有奖：从抖音侧边栏进入游戏可获得奖励"><button class="hotspot" style="left:295px;top:9px;width:47px;height:55px" data-action="entry-close" aria-label="关闭入口有奖"></button><button class="hotspot" style="left:79px;top:400px;width:175px;height:79px" data-action="entry-local" aria-label="进入侧边栏"></button></section>';overlay.append(wrapper);
+function clearCelebration(){clearTimeout(celebrationTimer);celebrationTimer=null;overlay.querySelector('.confetti')?.remove();}
+function confetti(){const colors=['#fff3b2','#e1faff','#ffbef0','#a5ffd1','#cec4ff'];return `<div class="confetti" aria-hidden="true">${Array.from({length:65},(_,i)=>`<i style="--x:${(i*173)%720}px;--w:${10+i%15}px;--h:${8+i%20}px;--color:${colors[i%5]};--duration:${2+i%7*.1}s;--delay:${i%5*.08}s;--drift:${(i%2?1:-1)*(30+i%70)}px"></i>`).join('')}</div>`;}
+function showWin(){
+  if(screen!=='play'||state.status!=='won')return;
+  stopAuto();queuedTap=null;modal=null;
+  const celebrate=celebratedRun!==state.runId;
+  if(celebrate){celebratedRun=state.runId;sound('win');award(1);}
+  const next=levels[levels.indexOf(level)+1];
+  overlay.innerHTML=`<div class="completion">${celebrate?confetti():''}<button type="button" class="blue completion-next" data-action="next">${next?'下一关':'返回选关'}</button></div>`;
+  baseControls();renderer.invalidate();wake();
+  clearTimeout(celebrationTimer);
+  if(celebrate)celebrationTimer=setTimeout(clearCelebration,3000);
 }
 function showLoss(){profile.streak=0;save();setModal('lost',panel('时间到',`<p>再试一次，把拼豆送回家！</p><button class="blue" data-action="restart">重新挑战</button><button class="secondary" data-action="home">返回主页</button>`));}
 function award(multiplier){const next=levels[levels.findIndex(l=>l.id===state.levelId)+1];const ok=claimReward(profile,state,multiplier,next?.id);save();return ok;}
@@ -116,10 +115,7 @@ function act(action){
   if(action==='retry-load'){retryLoad?.();return;}
   if(action==='cancel-loading'){showHome();return;}
   if(busy&&!modal&&action!=='settings')return;
-  if(action==='entry'){showEntry();return;}
-  if(action==='entry-local'){toast('本地版本无需进入抖音侧边栏');return;}
-  if(action==='entry-close'||(action==='close'&&modal==='entry')){overlay.querySelector('.entry-wrap')?.remove();modal=screen==='play'&&state.status==='won'?'win':null;return;}
-  if(action==='close'){if(state.status==='won'&&screen==='play'){showWin();return;}clearModal();return;}
+  if(action==='close'){clearModal();return;}
   if(action==='settings'){showSettings();return;}
   if(action==='expand'){if(state.status!=='playing')return;if(expandTray(state)){baseControls();sound('place');save();toast('已增加 12 格暂存空间');}else toast('暂存区已扩展至上限');return;}
   if(action.startsWith('locked-')){toast(`第 ${action.split('-')[1]} 关解锁`);return;}
@@ -133,11 +129,10 @@ function act(action){
   }
   if(action.startsWith('preview-')){showPreview(Number(action.split('-')[1]));return;}
   if(action.startsWith('start-')){startLevel(Number(action.split('-')[1]));return;}
-  if(action==='double'){
-    if(award(2)){toast('已领取双倍奖励');const b=overlay.querySelector('[data-action="double"]');b.disabled=true;b.setAttribute('aria-label','奖励已领取');overlay.querySelector('.balances').outerHTML=balances();}return;
+  if(action==='next'&&state.status==='won'){
+    const next=levels[levels.indexOf(level)+1];award(1);
+    if(next)startLevel(next.id);else showHome();return;
   }
-  if(action==='next'){award(1);showHome();return;}
-  if(action==='finish-home'){award(1);showHome();return;}
 }
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-action]');if(b&&!b.disabled){syncTime();act(b.dataset.action);wake();}});
 overlay.addEventListener('change',e=>{if(e.target.dataset.setting==='test-mode'){switchTestMode(e.target.checked);return;}if(e.target.dataset.setting==='sound'){profile.sound=e.target.checked;save();}});
@@ -153,16 +148,16 @@ function stopAuto(){
   autoRunning=false;autoPlan=null;queuedTap=null;autoSequence=null;autoPlanning=false;autoVersion++;autoWorker?.terminate();autoWorker=null;
   autoPlayback=null;autoTiming=null;
   autoMessage=state?.status==='won'?'自动通关完成 · '+autoSteps+' 步':'已停止 · 完成 '+autoSteps+' 步';
-  activeClock.reset(playing());updateTestControls();
+  updateTestControls();
 }
 function switchTestMode(enabled){
-  if(!testAvailable||testMode===enabled)return;
+  if(testMode===enabled)return;
   syncTime();stopAuto();save();testMode=enabled;
   try{storage.setItem(TEST_MODE_KEY,String(enabled));}catch{toast('测试开关仅本次生效');}
   profile=readProfile(profileStore(),levels);lastSerialized=null;state=profile.session;
   level=levels.find(l=>l.id===state?.levelId)||levels[0];
   if(!state){state=createSession(level);state.tutorialStep=profile.tutorialDone?6:0;}
-  entryShown=false;autoSteps=0;showHome();
+  celebratedRun=null;autoSteps=0;showHome();
 }
 function toggleAuto(){
   if(!testMode||screen!=='play'||modal||state?.status!=='playing')return;
@@ -172,7 +167,7 @@ function toggleAuto(){
   while(expandTray(state)){}baseControls();
   autoRunning=true;autoAt=performance.now();autoMessage='已加满仓 · 正在比较搬运方案…';
   autoPlayback=createAutoPlayback(level.id,autoAt);
-  activeClock.reset(false);save();updateTestControls();renderer.invalidate();scheduler.request();prepareAuto();
+  save();updateTestControls();renderer.invalidate();scheduler.request();prepareAuto();
 }
 function prepareAuto(){
   autoPlanning=true;const version=++autoVersion;
@@ -185,7 +180,7 @@ function prepareAuto(){
     autoComplete=result.complete;
     if(result.pending&&!result.steps.length&&autoSteps>=autoSequence.length&&!autoPlan){autoPlanning=true;return;}
     if(autoComplete){autoWorker?.terminate();autoWorker=null;}
-    autoMessage='已规划 '+autoSequence.length+' 批 · 倒计时暂停';if(!append||waiting)autoAt=performance.now();updateTestControls();scheduler.request();
+    autoMessage='已规划 '+autoSequence.length+' 批 · 计时中';if(!append||waiting)autoAt=performance.now();updateTestControls();scheduler.request();
   };
   const fallback=()=>{
     if(version!==autoVersion)return;
@@ -255,7 +250,7 @@ function handleTap(hit){
   renderer.invalidate();save();scheduler.request();
 }
 bindBoardGestures(canvas,{
-  getContext:()=>({level,state,enabled:!modal&&screen==='play'&&state?.status==='playing',allowTransform:!busy}),
+  getContext:()=>({level,state,enabled:!modal&&screen==='play'&&['playing','won'].includes(state?.status),allowTransform:!busy}),
   onChange:()=>{saver.defer();scheduler.request();},onEnd:save,
   onTap:p=>{stopAuto();handleTap(hitTest(level,state,p.x,p.y));}
 });
@@ -280,12 +275,12 @@ function tick(now){
   }
   sparkles=sparkles.filter(s=>now<s.start+(s.duration??650));
   const tutorial=!profile.tutorialDone&&level.id===1&&state.tutorialStep<6;
-  renderer.draw(assets,level,state,{flights,sparkles,streak:profile.streak,tutorial},now);
+  renderer.draw(assets,level,state,{flights,sparkles,streak:profile.streak,tutorial,pixelGap:720/(canvas.getBoundingClientRect().width||720)},now);
   if(wonAt&&now>=wonAt&&!modal){wonAt=0;showWin();}
   if(playing()&&!saver.pending&&now-lastSave>=3000)save();
   if(modal||document.hidden||screen!=='play')return;
   if(flights.length||sparkles.length||(tutorial&&state.status==='playing'))scheduler.request();
-  else if(autoPlanning)return;
+  else if(autoPlanning&&playing())scheduler.wakeAfter(Math.max(1,(state.remaining-(Math.ceil(state.remaining)-1))*1000));
   else if(autoRunning)scheduler.wakeAfter(Math.max(1,autoAt-now));
   else if(wonAt)scheduler.wakeAfter(Math.max(1,wonAt-now));
   else if(playing())scheduler.wakeAfter(Math.max(1,(state.remaining-(Math.ceil(state.remaining)-1))*1000));

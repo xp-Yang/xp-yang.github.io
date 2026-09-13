@@ -1,6 +1,6 @@
 import {locked,targetAt} from './engine.js';
 import {levels} from './levels.js';
-import {layout,BOARD_TOP,geometry,TRAY_SLOT_SIZE,TRAY_BEAD_SIZE,TRAY_PITCH_X,TRAY_PITCH_Y} from './viewport.js';
+import {layout,BOARD_TOP,BOARD_BOTTOM,inBoardArea,geometry,TRAY_SLOT_SIZE,TRAY_BEAD_SIZE,TRAY_PITCH_X,TRAY_PITCH_Y} from './viewport.js';
 import {drawSmoothGem} from './quality.js';
 import {PORTRAIT_COLORS} from './portrait-colors.js';
 export {layout} from './viewport.js';
@@ -15,8 +15,8 @@ export function point(level,state,zone,index,l=layout(level,state)){
 export function hitTest(level,state,x,y){
   const l=layout(level,state),w=level.target[0].length;
   const c=Math.round((l.worldX(x)-level.board.x)/level.board.pitch),r=Math.round((l.worldY(y)-level.board.y)/level.board.pitch);
-  if(x>=0&&x<=720&&y>=BOARD_TOP&&y<l.trayTop&&r>=0&&r<level.target.length&&c>=0&&c<w&&level.target[r][c]!=='.')return {zone:'board',index:r*w+c};
-  if(x>=l.trayLeft&&x<=l.trayLeft+l.trayWidth&&y>=l.trayTop&&y<l.trayBottom){const col=Math.max(0,Math.min(l.cols-1,Math.round((x-l.trayX)/TRAY_PITCH_X))),row=Math.max(0,Math.min(l.rows-1,Math.round((y-l.trayY)/TRAY_PITCH_Y))),index=row*l.cols+col;if(index<state.tray.length)return {zone:'tray',index};}
+  if(state.status!=='won'&&x>=l.trayLeft&&x<=l.trayLeft+l.trayWidth&&y>=l.trayTop&&y<l.trayBottom){const col=Math.max(0,Math.min(l.cols-1,Math.round((x-l.trayX)/TRAY_PITCH_X))),row=Math.max(0,Math.min(l.rows-1,Math.round((y-l.trayY)/TRAY_PITCH_Y))),index=row*l.cols+col;if(index<state.tray.length)return {zone:'tray',index};}
+  if(inBoardArea(level,state,{x,y})&&r>=0&&r<level.target.length&&c>=0&&c<w&&level.target[r][c]!=='.')return {zone:'board',index:r*w+c};
   return null;
 }
 export function clientPoint(rect,x,y){return {x:(x-rect.left)*720/rect.width,y:(y-rect.top)*1280/rect.height};}
@@ -66,10 +66,34 @@ function drawGem(ctx,assets,color,p,{selected=false,flat=false,alpha=1}={},gem=d
   gem(ctx,color,p.x,p.y-lift,p.size);
   ctx.restore();
 }
+function drawTopPanel(ctx,x,y,w,h){
+  ctx.save();ctx.shadowColor='#51486b1c';ctx.shadowBlur=12;ctx.shadowOffsetY=3;
+  round(ctx,x,y,w,h,18,'#fcfbfff5');ctx.restore();
+  round(ctx,x+.75,y+.75,w-1.5,h-1.5,17.25,null,'#dcd7ea',1.5);
+}
+function drawSettings(ctx){
+  drawTopPanel(ctx,10,17,64,58);
+  // Vector icons have no baked rectangular image background and stay sharp.
+  ctx.save();ctx.translate(42,46);ctx.fillStyle='#8881ae';ctx.lineJoin='round';
+  ctx.beginPath();
+  for(let i=0;i<32;i++){
+    const angle=i*Math.PI/16-Math.PI/16,r=[14,18,18,14][i%4];
+    const x=Math.cos(angle)*r,y=Math.sin(angle)*r;
+    if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);
+  }
+  ctx.closePath();ctx.moveTo(6,0);ctx.arc(0,0,6,0,Math.PI*2);
+  ctx.fill('evenodd');ctx.restore();
+}
 function drawTimer(ctx,assets,state){
-  round(ctx,544,27,152,37,11,'#fff');ctx.font='bold 29px Arial';ctx.fillStyle='#565a8e';ctx.textAlign='center';
-  const secs=Math.ceil(state.remaining);ctx.fillText(`${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`,620,56);
-  ctx.drawImage(assets.clock,506,14,50,55);
+  drawTopPanel(ctx,506,17,190,58);
+  ctx.save();ctx.translate(533,47);ctx.lineCap='round';ctx.lineJoin='round';
+  round(ctx,-5,-23,10,5,2,'#b5915c');
+  ctx.strokeStyle='#b5915c';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,-18);ctx.lineTo(0,-14);ctx.moveTo(10,-12);ctx.lineTo(13,-15);ctx.stroke();
+  ctx.beginPath();ctx.arc(0,0,14,0,Math.PI*2);ctx.fillStyle='#fff7e9';ctx.fill();ctx.stroke();
+  ctx.strokeStyle='#806c96';ctx.lineWidth=2.7;ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(0,0);ctx.lineTo(6,3);ctx.stroke();
+  ctx.beginPath();ctx.arc(0,0,2,0,Math.PI*2);ctx.fillStyle='#806c96';ctx.fill();ctx.restore();
+  ctx.save();ctx.font='bold 29px Arial';ctx.fillStyle='#565a8e';ctx.textAlign='center';
+  const secs=Math.ceil(state.remaining);ctx.fillText(`${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`,619,56);ctx.restore();
 }
 function drawProgress(ctx,level,state){
   const cells=geometry(level).cells,correct=cells.reduce((count,cell)=>count+Number(state.board[cell.index]===cell.color),0);
@@ -82,29 +106,18 @@ function drawProgress(ctx,level,state){
   }
   ctx.font='bold 22px Arial, "Microsoft YaHei", sans-serif';ctx.textAlign='center';ctx.fillStyle='#4f537f';ctx.fillText(`进度 ${percent}%`,289,54);
 }
-function visible(p,l,pad=p.size){return p.x+pad>=0&&p.x-pad<=720&&p.y+pad>=BOARD_TOP&&p.y-pad<l.trayTop;}
+function visible(p,l,pad=p.size){return p.x+pad>=0&&p.x-pad<=720&&p.y+pad>=BOARD_TOP&&p.y-pad<BOARD_BOTTOM;}
 function drawWell(ctx,p,base=null){
   const x=p.x-p.size/2,y=p.y-p.size/2,r=p.size*.28;
   if(base)round(ctx,x,y,p.size,p.size,r,base);
   const well=ctx.createLinearGradient(0,y,0,y+p.size);well.addColorStop(0,'#0005');well.addColorStop(1,'#0001');
   round(ctx,x,y,p.size,p.size,r,well);
 }
-function drawStatic(ctx,assets,level,state,view,l,gem=drawSmoothGem,reuse=null,capture=null){
+function drawStatic(ctx,assets,level,state,view,l,gem=drawSmoothGem){
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-  if(reuse){
-    const ratio=ctx.canvas.height/1280,height=Math.min(reuse.height/ratio,l.trayTop-BOARD_TOP);
-    ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(reuse,0,0,reuse.width,height*ratio,0,BOARD_TOP*ratio,reuse.width,height*ratio);ctx.restore();
-    if(BOARD_TOP+height<l.trayTop)ctx.drawImage(assets.background,0,BOARD_TOP+height,720,l.trayTop-BOARD_TOP-height,0,BOARD_TOP+height,720,l.trayTop-BOARD_TOP-height);
-  }else{
-  ctx.clearRect(0,0,720,1280);ctx.drawImage(assets.background,0,0,720,1280);capture?.();
-  ctx.drawImage(assets.settings,17,25,40,41);
-  drawProgress(ctx,level,state);
-  ctx.textAlign='center';
-  round(ctx,48,92,130,32,10,'#fff');ctx.font='22px Arial, "Microsoft YaHei", sans-serif';ctx.fillStyle='#565a8e';ctx.fillText('连胜：',98,116);ctx.fillStyle='#b92124';ctx.fillText(String(view.streak),146,116);ctx.drawImage(assets.trophy,10,83,50,44);
-  ctx.fillStyle='#8588aa';ctx.font='30px Arial, "Microsoft YaHei", sans-serif';ctx.fillText(`第${level.id}关`,360,120);
-  }
+  ctx.clearRect(0,0,720,1280);ctx.drawImage(assets.background,0,0,720,1280);
 
-  ctx.save();ctx.beginPath();ctx.rect(0,BOARD_TOP,720,l.trayTop-BOARD_TOP);ctx.clip();
+  ctx.save();ctx.beginPath();ctx.rect(0,BOARD_TOP,720,BOARD_BOTTOM-BOARD_TOP);ctx.clip();
   boardPath(ctx,level,state,l);ctx.lineJoin='round';
   for(const [width,color] of [[9,'#9d9fb7'],[6,'#c9cadb'],[3,'#fafafc']]){ctx.lineWidth=width*l.scale;ctx.strokeStyle=color;ctx.stroke();}
   ctx.fillStyle='#efeee4';ctx.fill();
@@ -119,24 +132,41 @@ function drawStatic(ctx,assets,level,state,view,l,gem=drawSmoothGem,reuse=null,c
     drawWell(ctx,p);
   }ctx.restore();ctx.restore();
 
-  if(!reuse){
-  round(ctx,l.trayLeft,l.trayTop,l.trayWidth,l.trayHeight,14,'#f8f8f8');
-  for(let i=0;i<state.tray.length;i++){const p=point(level,state,'tray',i,l);drawWell(ctx,{...p,size:TRAY_SLOT_SIZE},COLORS.W);}
-  }
-
   const moving=new Set(view.flights?.map(f=>`${f.toZone}:${f.to}`)||[]);
   const selected=new Set(state.selection?.ids||[]);
-  for(const zone of ['board','tray'])for(let i=0;i<state[zone].length;i++){
-    if(reuse&&zone==='tray')continue;
+  for(const zone of ['board'])for(let i=0;i<state[zone].length;i++){
     const color=state[zone][i];if(!color||moving.has(`${zone}:${i}`))continue;
     const p=point(level,state,zone,i,l);if(zone==='board'&&!visible(p,l))continue;
-    ctx.save();if(zone==='board'){ctx.beginPath();ctx.rect(0,BOARD_TOP,720,l.trayTop-BOARD_TOP);ctx.clip();}
-    drawGem(ctx,assets,color,p,{selected:state.selection?.zone===zone&&selected.has(i),flat:zone==='board'&&locked(level,state,i)},gem);
+    ctx.save();ctx.beginPath();ctx.rect(0,BOARD_TOP,720,BOARD_BOTTOM-BOARD_TOP);ctx.clip();
+    if(locked(level,state,i)){
+      // Snap shared edges to screen pixels; draw each shared divider only once.
+      const unit=view.pixelGap||1,pitch=level.board.pitch*l.scale;
+      const left=Math.round((p.x-pitch/2)/unit)*unit,top=Math.round((p.y-pitch/2)/unit)*unit;
+      const right=Math.round((p.x+pitch/2)/unit)*unit,bottom=Math.round((p.y+pitch/2)/unit)*unit;
+      const border=unit*.5;
+      ctx.fillStyle=COLORS[color];ctx.fillRect(left,top,right-left,bottom-top);
+      ctx.fillStyle='rgba(0,0,0,.35)';
+      ctx.fillRect(left,top,right-left,border);
+      ctx.fillRect(left,top+border,border,Math.max(0,bottom-top-border));
+    }else drawGem(ctx,assets,color,p,{selected:state.selection?.zone===zone&&selected.has(i)},gem);
     ctx.restore();
   }
 }
+function drawFloatingUI(ctx,assets,level,state,view,l,gem){
+  if(state.status!=='won'){
+  ctx.save();ctx.shadowColor='#35314e30';ctx.shadowBlur=14;ctx.shadowOffsetY=3;
+  round(ctx,l.trayLeft,l.trayTop,l.trayWidth,l.trayHeight,14,'#f8f8f8eb');ctx.restore();
+  const moving=new Set(view.flights?.filter(f=>f.toZone==='tray').map(f=>f.to)||[]);
+  const selected=new Set(state.selection?.zone==='tray'?state.selection.ids:[]);
+  for(let i=0;i<state.tray.length;i++){
+    const p=point(level,state,'tray',i,l);drawWell(ctx,{...p,size:TRAY_SLOT_SIZE},COLORS.W);
+    if(state.tray[i]&&!moving.has(i))drawGem(ctx,assets,state.tray[i],p,{selected:selected.has(i)},gem);
+  }
+  }
+  drawSettings(ctx);
+  drawProgress(ctx,level,state);drawTimer(ctx,assets,state);
+}
 function drawDynamic(ctx,assets,level,state,view,t,l,gem=drawSmoothGem){
-  drawTimer(ctx,assets,state);
   for(const f of view.flights||[]){
     const progress=Math.min(1,Math.max(0,(t-f.start)/f.duration)),ease=1-(1-progress)**3,a=f.fromPoint,b=point(level,state,f.toZone,f.to,l);
     const p={x:a.x+(b.x-a.x)*ease,y:a.y+(b.y-a.y)*ease-Math.sin(progress*Math.PI)*70,size:a.size+(b.size-a.size)*ease};
@@ -146,6 +176,7 @@ function drawDynamic(ctx,assets,level,state,view,t,l,gem=drawSmoothGem){
     const age=(t-s.start)/(s.duration??650);if(age<0||age>1)continue;
     const p=point(level,state,'board',s.index,l),rad=p.size*.6*Math.sin(age*Math.PI);if(!visible(p,l))continue;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(age);ctx.fillStyle=`rgba(255,255,255,${1-age})`;ctx.beginPath();for(let j=0;j<8;j++){const r=j%2?rad*.2:rad;ctx.lineTo(Math.cos(j*Math.PI/4)*r,Math.sin(j*Math.PI/4)*r);}ctx.closePath();ctx.fill();ctx.restore();
   }
+  drawFloatingUI(ctx,assets,level,state,view,l,gem);
   if(view.tutorial&&state.status==='playing')drawTutorial(ctx,assets,level,state,t,l);
 }
 export function render(ctx,assets,level,state,view,t){const l=layout(level,state);drawStatic(ctx,assets,level,state,view,l);drawDynamic(ctx,assets,level,state,view,t,l);}
@@ -154,9 +185,9 @@ export function createRenderer(ctx,{makeCanvas=(w,h)=>{
   if(typeof document!=='undefined'){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
   return null;
 },budget=48*1024*1024}={}){
-  let scene=null,sceneContext=null,background=null,key=null,contentKey=null,currentLevel=null,dirty=true,lastDynamic=false,lastSecond=null;
+  let scene=null,sceneContext=null,key=null,currentLevel=null,dirty=true,lastDynamic=false,lastSecond=null;
   const sprites=new Map(),stats={frames:0,sceneBuilds:0,timerOnly:0,spriteBuilds:0,bytes:0};
-  function release(){if(scene){scene.width=scene.height=1;}if(background)background.width=background.height=1;for(const s of sprites.values())s.canvas.width=s.canvas.height=1;sprites.clear();scene=null;sceneContext=null;background=null;key=null;contentKey=null;stats.bytes=0;dirty=true;lastDynamic=false;lastSecond=null;}
+  function release(){if(scene){scene.width=scene.height=1;}for(const s of sprites.values())s.canvas.width=s.canvas.height=1;sprites.clear();scene=null;sceneContext=null;key=null;stats.bytes=0;dirty=true;lastDynamic=false;lastSecond=null;}
   function gem(target,color,x,y,size){
     const m=target.getTransform(),pixels=Math.ceil(size*Math.max(Math.abs(m.a),Math.abs(m.d))),required=Math.max(16,Math.ceil(pixels/16)*16);
     let sprite=sprites.get(color);
@@ -177,17 +208,15 @@ export function createRenderer(ctx,{makeCanvas=(w,h)=>{
     if(!scene&&w*h*4<=budget){scene=makeCanvas(w,h);if(scene){sceneContext=scene.getContext('2d');sceneContext.setTransform(w/720,0,0,h/1280,0,0);sceneContext.imageSmoothingEnabled=true;sceneContext.imageSmoothingQuality='high';stats.bytes+=w*h*4;}}
     const l=layout(level,state),selection=state.selection;
     const nextContent=[state.runId,state.tray.length,view.streak,state.board.map(c=>c||'_').join(''),state.tray.map(c=>c||'_').join(''),selection?.zone,selection?.ids.join(','),(view.flights||[]).map(f=>`${f.toZone}:${f.to}`).join(',')].join('|');
-    const nextKey=[l.scale,l.x,l.y,nextContent].join('|');
+    const nextKey=[l.scale,l.x,l.y,view.pixelGap,state.status,nextContent].join('|');
     const changed=dirty||key!==nextKey,dynamic=!!(view.flights?.length||view.sparkles?.length||(view.tutorial&&state.status==='playing'&&state.tutorialStep<6));
     if(!scene){drawStatic(ctx,assets,level,state,view,l,gem);stats.sceneBuilds++;drawDynamic(ctx,assets,level,state,view,t,l,gem);return;}
     if(changed){
-      if(!background){const height=Math.min(Math.round((l.trayTop-BOARD_TOP)*h/1280),Math.floor((budget-stats.bytes-512*1024)/(w*4)));if(height>0){background=makeCanvas(w,height);if(background)stats.bytes+=w*height*4;}}
-      const reuse=contentKey===nextContent&&background&&key!==null?background:null;
-      drawStatic(sceneContext,assets,level,state,view,l,gem,reuse,background?()=>{const b=background.getContext('2d');b.drawImage(scene,0,BOARD_TOP*h/1280,w,background.height,0,0,w,background.height);}:null);
-      stats.sceneBuilds++;key=nextKey;contentKey=nextContent;dirty=false;
+      drawStatic(sceneContext,assets,level,state,view,l,gem);
+      stats.sceneBuilds++;key=nextKey;dirty=false;
     }
     if(changed||dynamic||lastDynamic){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(scene,0,0);ctx.restore();drawDynamic(ctx,assets,level,state,view,t,l,gem);}
-    else if(lastSecond!==Math.ceil(state.remaining)){drawTimer(ctx,assets,state);stats.timerOnly++;}
+    else if(lastSecond!==Math.ceil(state.remaining)){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(scene,0,0);ctx.restore();drawDynamic(ctx,assets,level,state,view,t,l,gem);stats.timerOnly++;}
     lastDynamic=dynamic;lastSecond=Math.ceil(state.remaining);
   }};
 }

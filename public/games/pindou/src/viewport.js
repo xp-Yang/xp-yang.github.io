@@ -1,4 +1,4 @@
-export const BOARD_TOP=160;
+export const BOARD_TOP=0,BOARD_BOTTOM=1280;
 export const TRAY_SLOT_SIZE=39/2,TRAY_BEAD_SIZE=36/2;
 export const TRAY_GAP_X=(52.5-39)/4,TRAY_GAP_Y=(68-39)/4;
 export const TRAY_PITCH_X=TRAY_SLOT_SIZE+TRAY_GAP_X,TRAY_PITCH_Y=TRAY_SLOT_SIZE+TRAY_GAP_Y;
@@ -16,8 +16,8 @@ export function layout(level,state){
   const trayHeight=Math.max(48,(rows-1)*TRAY_PITCH_Y+TRAY_SLOT_SIZE+24),trayBottom=1264,trayTop=trayBottom-trayHeight;
   const trayLeft=(720-trayWidth-72)/2,trayX=trayLeft+12+TRAY_SLOT_SIZE/2,trayY=trayTop+12+TRAY_SLOT_SIZE/2;
   const bounds=geometry(level),worldCenterX=(bounds.left+bounds.right)/2,worldCenterY=(bounds.top+bounds.bottom)/2;
-  const centerX=360,centerY=(BOARD_TOP+trayTop)/2;
-  const fit=Math.min(680/(bounds.right-bounds.left+level.board.pitch+18),(trayTop-BOARD_TOP-40)/(bounds.bottom-bounds.top+level.board.pitch+18));
+  const centerX=360,centerY=(BOARD_TOP+BOARD_BOTTOM)/2;
+  const fit=Math.min(680/(bounds.right-bounds.left+level.board.pitch+18),(BOARD_BOTTOM-BOARD_TOP-40)/(bounds.bottom-bounds.top+level.board.pitch+18));
   const raw=state.viewport||{},zoom=Number.isFinite(raw.zoom)?Math.max(.5,Math.min(level.maxZoom||3,raw.zoom)):1;
   const x=Number.isFinite(raw.x)?raw.x:0,y=Number.isFinite(raw.y)?raw.y:0,scale=fit*zoom;
   return {trayTop,trayBottom,trayLeft,trayWidth,trayHeight,trayX,trayY,cols,rows,centerX,centerY,scale,zoom,x,y,
@@ -25,14 +25,19 @@ export function layout(level,state){
     boardY:v=>centerY+(v-worldCenterY)*scale+y,boardX:v=>centerX+(v-worldCenterX)*scale+x,
     worldX:v=>worldCenterX+(v-centerX-x)/scale,worldY:v=>worldCenterY+(v-centerY-y)/scale};
 }
-export function inBoardArea(level,state,p){return p.x>=0&&p.x<=720&&p.y>=BOARD_TOP&&p.y<layout(level,state).trayTop;}
+export function inBoardArea(level,state,p){
+  const l=layout(level,state);
+  const overTray=p.x>=l.trayLeft&&p.x<=l.trayLeft+l.trayWidth&&p.y>=l.trayTop&&p.y<l.trayBottom;
+  const overExpand=p.x>=l.expandX&&p.x<=l.expandX+62&&p.y>=l.expandY&&p.y<=l.expandY+44;
+  return p.x>=0&&p.x<=720&&p.y>=BOARD_TOP&&p.y<BOARD_BOTTOM&&(state.status==='won'||(!overTray&&!overExpand));
+}
 function constrain(level,state){
   const l=layout(level,state),bounds=geometry(level);
   const pad=level.board.pitch*l.scale/2;
   const left=l.boardX(bounds.left)-pad,right=l.boardX(bounds.right)+pad;
   const top=l.boardY(bounds.top)-pad,bottom=l.boardY(bounds.bottom)+pad;
   let dx=right<80?80-right:left>640?640-left:0;
-  let dy=bottom<BOARD_TOP+80?BOARD_TOP+80-bottom:top>l.trayTop-80?l.trayTop-80-top:0;
+  let dy=bottom<BOARD_TOP+80?BOARD_TOP+80-bottom:top>BOARD_BOTTOM-80?BOARD_BOTTOM-80-top:0;
   // Irregular patterns may have empty bounding-box corners. Keep an actual bead reachable.
   if(dx||dy){
   const moved=bounds.cells.map(p=>({x:l.boardX(p.x)+dx,y:l.boardY(p.y)+dy}));

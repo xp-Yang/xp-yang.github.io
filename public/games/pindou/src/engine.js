@@ -50,12 +50,14 @@ export function move(level,state,zone,index) {
   if(isComplete(level,state))state.status='won';
   return {moves,relocations,reason:''};
 }
-// Stable packing keeps stored colors in arrival order and selection on the same beads.
+// Keep color groups in first-appearance order and each group's beads stable.
+// Read a snapshot before writing: gathering a later bead may shift others right.
 function compactTray(state,moves=[]){
   const incoming=new Map(moves.filter(m=>m.toZone==='tray').map(m=>[m.to,m]));
+  const groups=new Map();
+  state.tray.forEach((color,from)=>{if(color!==null){if(!groups.has(color))groups.set(color,[]);groups.get(color).push(from);}});
   const positions=new Map(),relocations=[];let next=0;
-  for(let from=0;from<state.tray.length;from++){
-    const color=state.tray[from];if(color===null)continue;
+  for(const [color,indices] of groups)for(const from of indices){
     const to=next++;positions.set(from,to);
     if(incoming.has(from))incoming.get(from).to=to;
     else if(from!==to)relocations.push({fromZone:'tray',from,toZone:'tray',to,color});
@@ -104,6 +106,26 @@ export function validSession(level,s){
   for(const c of s.tray)if(c!==null){if(!expected[c])return false;actual[c]=(actual[c]||0)+1;}
   return Object.keys(expected).every(c=>expected[c]===actual[c])&&(s.status!=='won'||isComplete(level,s));
 }
+function restoreSplitColors(level,state){
+  for(const split of level.colorSplits||[]){
+    const expected=level.target.join(''),inventory=[...state.board,...state.tray];
+    const expectedFrom=[...expected].filter(color=>color===split.from).length;
+    const expectedTo=[...expected].filter(color=>color===split.to).length;
+    const actualFrom=inventory.filter(color=>color===split.from).length;
+    const actualTo=inventory.filter(color=>color===split.to).length;
+    const needed=expectedTo-actualTo;
+    if(needed<=0)continue;
+    if(needed!==split.count||actualFrom-expectedFrom!==needed)continue;
+    const preferred=[],movable=[],last=[];
+    state.board.forEach((color,index)=>{
+      if(color!==split.from)return;
+      const target=targetAt(level,index);
+      (target===split.to?preferred:target===split.from?last:movable).push(['board',index]);
+    });
+    const tray=[];state.tray.forEach((color,index)=>{if(color===split.from)tray.push(['tray',index]);});
+    for(const [zone,index] of [...preferred,...tray,...movable,...last].slice(0,needed))state[zone][index]=split.to;
+  }
+}
 export function readProfile(storage,levels){
   const fresh=defaultProfile();
   try{
@@ -124,10 +146,17 @@ export function readProfile(storage,levels){
     fresh.unlocked=Math.max(fresh.unlocked,...fresh.unlockedLevels);
     fresh.claimed=Array.isArray(raw.claimed)?raw.claimed.filter(x=>typeof x==='string'):[];
     const level=levels.find(l=>l.id===raw.session?.levelId);
+    // Color-only revisions retain the same board geometry and bead inventory.
+    // Distinct new keys make this migration idempotent on subsequent reloads.
+    if(level?.colorAliases&&Array.isArray(raw.session.board)&&Array.isArray(raw.session.tray)){
+      for(const zone of ['board','tray'])raw.session[zone]=raw.session[zone].map(c=>level.colorAliases[c]||c);
+      restoreSplitColors(level,raw.session);
+      if(raw.session.status==='playing'&&isComplete(level,raw.session))raw.session.status='won';
+    }
     if(level?.capacity===48&&raw.session.trayVersion!==2&&raw.session.expanded<=3&&validSession({...level,capacity:36},raw.session)){
       raw.session.tray.push(...Array(12).fill(null));raw.session.trayVersion=2;
     }
-    if(level&&validSession(level,raw.session)){fresh.session=raw.session;fresh.session.selection=null;}
+    if(level&&validSession(level,raw.session)){fresh.session=raw.session;fresh.session.selection=null;compactTray(fresh.session);}
   }catch{}
   return fresh;
 }
