@@ -7,6 +7,7 @@
       "slug": "schwarzschild-event-horizon",
       "type": "Project",
       "title": "史瓦西事件视界",
+      "cover": "/images/schwarzschild-reference.png",
       "summary": "在浏览器中实时积分 Schwarzschild 零测地线，呈现事件视界、光子环、吸积盘多重像与引力透镜。",
       "publishedAt": "2026-09-12",
       "tags": ["WebGL2", "GLSL", "Physics"],
