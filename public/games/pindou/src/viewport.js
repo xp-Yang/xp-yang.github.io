@@ -1,7 +1,9 @@
 export const BOARD_TOP=0,BOARD_BOTTOM=1280;
-export const TRAY_SLOT_SIZE=39/2,TRAY_BEAD_SIZE=36/2;
-export const TRAY_GAP_X=(52.5-39)/4,TRAY_GAP_Y=(68-39)/4;
+export const TRAY_SLOT_SIZE=28,TRAY_BEAD_SIZE=26;
+export const TRAY_GAP_X=8,TRAY_GAP_Y=10;
 export const TRAY_PITCH_X=TRAY_SLOT_SIZE+TRAY_GAP_X,TRAY_PITCH_Y=TRAY_SLOT_SIZE+TRAY_GAP_Y;
+export const COMPACT_TRAY_SLOT_SIZE=12,COMPACT_TRAY_BEAD_SIZE=11,COMPACT_TRAY_GAP=3;
+export const TRAY_EXPAND_WIDTH=31,TRAY_EXPAND_HEIGHT=22;
 const geometryCache=new WeakMap();
 export function geometry(level){
   if(geometryCache.has(level))return geometryCache.get(level);
@@ -11,24 +13,29 @@ export function geometry(level){
   geometryCache.set(level,result);return result;
 }
 export function layout(level,state){
-  const cols=Math.min(24,state.tray.length),rows=Math.ceil(state.tray.length/cols);
-  const trayWidth=(cols-1)*TRAY_PITCH_X+TRAY_SLOT_SIZE+24;
-  const trayHeight=Math.max(48,(rows-1)*TRAY_PITCH_Y+TRAY_SLOT_SIZE+24),trayBottom=1264,trayTop=trayBottom-trayHeight;
-  const trayLeft=(720-trayWidth-72)/2,trayX=trayLeft+12+TRAY_SLOT_SIZE/2,trayY=trayTop+12+TRAY_SLOT_SIZE/2;
+  const compact=level.id===9;
+  const traySlotSize=compact?COMPACT_TRAY_SLOT_SIZE:TRAY_SLOT_SIZE,trayBeadSize=compact?COMPACT_TRAY_BEAD_SIZE:TRAY_BEAD_SIZE;
+  const trayPitchY=compact?traySlotSize+COMPACT_TRAY_GAP:TRAY_PITCH_Y,padding=compact?10:12;
+  const outerMargin=12,expandGap=8,trayWidth=720-outerMargin*2-expandGap-TRAY_EXPAND_WIDTH,innerWidth=trayWidth-padding*2;
+  const minimumGap=compact?2:6,maxCols=Math.max(1,Math.floor((innerWidth+minimumGap)/(traySlotSize+minimumGap)));
+  const cols=Math.min(maxCols,state.tray.length),rows=Math.ceil(state.tray.length/cols);
+  const trayPitchX=cols>1?(innerWidth-traySlotSize)/(cols-1):0;
+  const trayHeight=Math.max(48,(rows-1)*trayPitchY+traySlotSize+padding*2),trayBottom=1264,trayTop=trayBottom-trayHeight;
+  const trayLeft=outerMargin,trayX=trayLeft+padding+traySlotSize/2,trayY=trayTop+padding+traySlotSize/2;
   const bounds=geometry(level),worldCenterX=(bounds.left+bounds.right)/2,worldCenterY=(bounds.top+bounds.bottom)/2;
   const centerX=360,centerY=(BOARD_TOP+BOARD_BOTTOM)/2;
   const fit=Math.min(680/(bounds.right-bounds.left+level.board.pitch+18),(BOARD_BOTTOM-BOARD_TOP-40)/(bounds.bottom-bounds.top+level.board.pitch+18));
   const raw=state.viewport||{},zoom=Number.isFinite(raw.zoom)?Math.max(.5,Math.min(level.maxZoom||3,raw.zoom)):1;
   const x=Number.isFinite(raw.x)?raw.x:0,y=Number.isFinite(raw.y)?raw.y:0,scale=fit*zoom;
-  return {trayTop,trayBottom,trayLeft,trayWidth,trayHeight,trayX,trayY,cols,rows,centerX,centerY,scale,zoom,x,y,
-    expandX:trayLeft+trayWidth+10,expandY:trayTop+(trayHeight-44)/2,
+  return {trayTop,trayBottom,trayLeft,trayWidth,trayHeight,trayX,trayY,traySlotSize,trayBeadSize,trayPitchX,trayPitchY,cols,rows,centerX,centerY,scale,zoom,x,y,
+    expandX:trayLeft+trayWidth+expandGap,expandY:trayTop+(trayHeight-TRAY_EXPAND_HEIGHT)/2,expandWidth:TRAY_EXPAND_WIDTH,expandHeight:TRAY_EXPAND_HEIGHT,
     boardY:v=>centerY+(v-worldCenterY)*scale+y,boardX:v=>centerX+(v-worldCenterX)*scale+x,
     worldX:v=>worldCenterX+(v-centerX-x)/scale,worldY:v=>worldCenterY+(v-centerY-y)/scale};
 }
 export function inBoardArea(level,state,p){
   const l=layout(level,state);
   const overTray=p.x>=l.trayLeft&&p.x<=l.trayLeft+l.trayWidth&&p.y>=l.trayTop&&p.y<l.trayBottom;
-  const overExpand=p.x>=l.expandX&&p.x<=l.expandX+62&&p.y>=l.expandY&&p.y<=l.expandY+44;
+  const overExpand=p.x>=l.expandX&&p.x<=l.expandX+l.expandWidth&&p.y>=l.expandY&&p.y<=l.expandY+l.expandHeight;
   return p.x>=0&&p.x<=720&&p.y>=BOARD_TOP&&p.y<BOARD_BOTTOM&&(state.status==='won'||(!overTray&&!overExpand));
 }
 function constrain(level,state){

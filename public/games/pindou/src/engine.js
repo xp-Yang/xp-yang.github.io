@@ -1,9 +1,15 @@
 export const SAVE_KEY = 'pindou-kuanghuan:v1';
 export const MAX_TRAY_CAPACITY=96,TRAY_EXPANSION=12;
+export function trayRules(level){
+  const expansion=level.trayExpansion||TRAY_EXPANSION,configured=level.trayMaxExpansions!=null;
+  const maxExpansions=configured?level.trayMaxExpansions:Math.ceil((MAX_TRAY_CAPACITY-level.capacity)/expansion);
+  return {capacity:level.capacity,expansion,maxExpansions,maxCapacity:configured?level.capacity+expansion*maxExpansions:MAX_TRAY_CAPACITY};
+}
 export const defaultProfile = () => ({version:1,levelOrder:2,unlocked:1,unlockedLevels:[1],currentLevel:1,coins:100,energy:100,puzzles:0,streak:0,bestStreak:0,tutorialDone:false,sound:true,claimed:[],session:null});
 export function isLevelUnlocked(profile,id){return Array.isArray(profile.unlockedLevels)?profile.unlockedLevels.includes(id):id<=profile.unlocked;}
 export function createSession(level, runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`) {
-  return {levelId:level.id,runId,trayVersion:2,board:level.initial.flatMap(row=>[...row].map(c=>c==='.'?undefined:c)),tray:Array(level.capacity).fill(null),remaining:level.timeLimit,status:'playing',selection:null,expanded:0,tutorialStep:0};
+  const rules=trayRules(level);
+  return {levelId:level.id,runId,trayVersion:3,trayStep:rules.expansion,maxTrayCapacity:rules.maxCapacity,board:level.initial.flatMap(row=>[...row].map(c=>c==='.'?undefined:c)),tray:Array(rules.capacity).fill(null),remaining:level.timeLimit,status:'playing',selection:null,expanded:0,tutorialStep:0};
 }
 export function targetAt(level, index) {return level.target[Math.floor(index / level.target[0].length)]?.[index % level.target[0].length];}
 export function locked(level, state, index) {return state.board[index] != null && state.board[index]===targetAt(level,index);}
@@ -84,8 +90,8 @@ export function interact(level,state,hit){
   return {...result,kind:result.moves.length?'moved':'cancelled'};
 }
 export function isComplete(level,state){return level.target.every((row,r)=>[...row].every((c,x)=>c==='.'||state.board[r*row.length+x]===c))&&state.tray.every(c=>c===null);}
-export function canExpandTray(state){return state.status==='playing'&&state.tray.length<MAX_TRAY_CAPACITY;}
-export function expandTray(state){if(!canExpandTray(state))return false;state.tray.push(...Array(Math.min(TRAY_EXPANSION,MAX_TRAY_CAPACITY-state.tray.length)).fill(null));state.expanded++;return true;}
+export function canExpandTray(state){return state.status==='playing'&&state.tray.length<(state.maxTrayCapacity||MAX_TRAY_CAPACITY);}
+export function expandTray(state){if(!canExpandTray(state))return false;const step=state.trayStep||TRAY_EXPANSION,max=state.maxTrayCapacity||MAX_TRAY_CAPACITY;state.tray.push(...Array(Math.min(step,max-state.tray.length)).fill(null));state.expanded++;return true;}
 export function elapse(state,seconds){if(state.status!=='playing')return;state.remaining=Math.max(0,state.remaining-seconds);if(state.remaining===0){state.status='lost';state.selection=null;}}
 export function claimReward(profile,state,multiplier=1,nextLevelId=state.levelId+1){
   if(state.status!=='won'||profile.claimed.includes(state.runId))return false;
@@ -96,7 +102,11 @@ export function claimReward(profile,state,multiplier=1,nextLevelId=state.levelId
   return true;
 }
 export function validSession(level,s){
-  if(!s||s.levelId!==level.id||typeof s.runId!=='string'||!Array.isArray(s.board)||s.board.length!==level.target.length*level.target[0].length||!Array.isArray(s.tray)||!Number.isInteger(s.expanded)||s.expanded<0||s.expanded>Math.ceil((MAX_TRAY_CAPACITY-level.capacity)/TRAY_EXPANSION)||s.tray.length!==Math.min(MAX_TRAY_CAPACITY,level.capacity+s.expanded*TRAY_EXPANSION)||!['playing','won','lost'].includes(s.status)||!Number.isFinite(s.remaining)||s.remaining<0||s.remaining>level.timeLimit)return false;
+  if(!s)return false;
+  const rules=trayRules(level),legacy=Number.isInteger(s.legacyTrayCapacity)&&s.legacyTrayCapacity>rules.maxCapacity&&s.legacyTrayCapacity===s.tray?.length;
+  const expectedLength=legacy?s.legacyTrayCapacity:Math.min(rules.maxCapacity,rules.capacity+s.expanded*rules.expansion);
+  const expectedMaximum=legacy?s.legacyTrayCapacity:rules.maxCapacity;
+  if(!s||s.levelId!==level.id||typeof s.runId!=='string'||!Array.isArray(s.board)||s.board.length!==level.target.length*level.target[0].length||!Array.isArray(s.tray)||!Number.isInteger(s.expanded)||s.expanded<0||s.expanded>rules.maxExpansions||s.tray.length!==expectedLength||s.trayVersion===3&&(s.trayStep!==rules.expansion||s.maxTrayCapacity!==expectedMaximum)||!['playing','won','lost'].includes(s.status)||!Number.isFinite(s.remaining)||s.remaining<0||s.remaining>level.timeLimit)return false;
   const expected={},actual={};
   for(const row of level.target)for(const c of row)if(c!=='.')expected[c]=(expected[c]||0)+1;
   for(let i=0;i<s.board.length;i++){
@@ -105,6 +115,18 @@ export function validSession(level,s){
   }
   for(const c of s.tray)if(c!==null){if(!expected[c])return false;actual[c]=(actual[c]||0)+1;}
   return Object.keys(expected).every(c=>expected[c]===actual[c])&&(s.status!=='won'||isComplete(level,s));
+}
+function upgradeTray(level,state){
+  if(state.trayVersion===3)return;
+  const rules=trayRules(level),beads=state.tray.filter(color=>color!=null);
+  const preservedExpansions=Math.max(0,Math.min(rules.maxExpansions,Number.isInteger(state.expanded)?state.expanded:0));
+  let length=Math.max(rules.capacity+preservedExpansions*rules.expansion,Math.ceil(beads.length/rules.expansion)*rules.expansion);
+  length=Math.max(rules.capacity,length);
+  state.expanded=Math.min(rules.maxExpansions,Math.max(0,Math.ceil((length-rules.capacity)/rules.expansion)));
+  if(length>rules.maxCapacity){state.legacyTrayCapacity=length;state.expanded=rules.maxExpansions;}
+  else delete state.legacyTrayCapacity;
+  state.tray=[...beads,...Array(length-beads.length).fill(null)];
+  state.trayVersion=3;state.trayStep=rules.expansion;state.maxTrayCapacity=state.legacyTrayCapacity||rules.maxCapacity;
 }
 function restoreSplitColors(level,state){
   for(const split of level.colorSplits||[]){
@@ -153,9 +175,7 @@ export function readProfile(storage,levels){
       restoreSplitColors(level,raw.session);
       if(raw.session.status==='playing'&&isComplete(level,raw.session))raw.session.status='won';
     }
-    if(level?.capacity===48&&raw.session.trayVersion!==2&&raw.session.expanded<=3&&validSession({...level,capacity:36},raw.session)){
-      raw.session.tray.push(...Array(12).fill(null));raw.session.trayVersion=2;
-    }
+    if(level&&Array.isArray(raw.session?.tray))upgradeTray(level,raw.session);
     if(level&&validSession(level,raw.session)){fresh.session=raw.session;fresh.session.selection=null;compactTray(fresh.session);}
   }catch{}
   return fresh;

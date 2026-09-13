@@ -26,8 +26,8 @@ html{-webkit-text-size-adjust:100%}#game{-webkit-touch-callout:none}img{-webkit-
 
 #board.dragging{cursor:grabbing}
 .auto-play-floating{position:absolute;right:20px;top:90px;z-index:1;min-width:190px;height:48px;padding:0 16px;border:1.5px solid #c8c0de;border-radius:16px;background:#f7f4fff0;box-shadow:0 4px 14px #49416426;color:#6c5a92;font-size:21px;pointer-events:auto}
-.tray-expand{position:absolute;width:62px;height:44px;border:1.5px solid #b8b9ce;border-radius:12px;background:#f8f8fc;color:#767990;font-size:19px;pointer-events:auto}.tray-expand:disabled{opacity:.35;cursor:default}
+.tray-expand{position:absolute;width:31px;height:22px;padding:0;border:1px solid #b8b9ce;border-radius:6px;background:#f8f8fc;color:#767990;pointer-events:auto}.tray-expand:disabled{opacity:.35;cursor:default}
 
-.tray-expand svg{display:block;width:25px;height:25px;margin:auto;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+.tray-expand svg{display:block;width:13px;height:13px;margin:auto;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
 
 .completion{position:absolute;inset:0;pointer-events:none}.completion-next{position:absolute;left:50%;bottom:32px;transform:translateX(-50%);margin:0;box-shadow:0 5px 20px #34365744;animation:completion-appear .35s ease-out both}@keyframes completion-appear{from{opacity:0;translate:0 18px}to{opacity:1;translate:0 0}}

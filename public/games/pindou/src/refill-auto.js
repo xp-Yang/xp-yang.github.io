@@ -11,15 +11,15 @@ function newHoles(level,moves){
   return {count:moves.length,largest:sorted[0]?.[1]||0,regions:sorted.map(([region,count])=>({region,count}))};
 }
 export function startRestartSearch(level,state,fsm,fallback){
-  const d=describeAutoState(level,state);
+  const d=describeAutoState(level,state),trayCapacity=state.tray.length;
   const focus=fsm.colorPriority?currentAutoColor(level,state):null;
   const groups=d.groups.filter(g=>g.ids.length>=6&&(!focus||g.ids.some(i=>d.t.target[i]===focus.color))).map(g=>{
     const anchors=sourceAnchors(g,d.t);let potential=0;
     if(focus){const blocker=g.ids.find(i=>d.t.target[i]===focus.color);if(!anchors.includes(blocker)){anchors.unshift(blocker);anchors.splice(4);}}
     for(const anchor of anchors){const selected={...state,selection:null};select(level,selected,'board',anchor);
-      potential=Math.max(potential,newHoles(level,selected.selection.ids.slice(0,96).map(from=>({from}))).largest);
+      potential=Math.max(potential,newHoles(level,selected.selection.ids.slice(0,trayCapacity).map(from=>({from}))).largest);
     }
-    return {...g,anchors,potential,rank:[focus?g.ids.filter(i=>d.t.target[i]===focus.color).length:0,Math.min(96,g.ids.length),potential],key:String(g.ids[0]).padStart(6,'0')};
+    return {...g,anchors,potential,rank:[focus?g.ids.filter(i=>d.t.target[i]===focus.color).length:0,Math.min(trayCapacity,g.ids.length),potential],key:String(g.ids[0]).padStart(6,'0')};
   }).sort(compare).slice(0,4);
   return {groups,groupIndex:0,current:null,best:null,fallback,triggerPhase:fsm.phase,triggerAmount:fallback.amount};
 }
@@ -109,7 +109,7 @@ export async function advanceRestartSearch(level,root,fsm,search,check){
     }
     // Reaching the minimum does not stop draining: this is reached only after
     // an empty tray, or after all protected-target-compatible moves run out.
-    const free=freeSlots(current.state),minimum=Math.min(group.ids.length,96);
+    const free=freeSlots(current.state),minimum=Math.min(group.ids.length,current.state.tray.length);
     if(free>=minimum){
       while(current.anchorIndex<group.anchors.length){
         if(await check())return false;

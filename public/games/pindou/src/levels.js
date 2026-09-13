@@ -86,4 +86,13 @@ const recordedLevels = [
     "source": "用户录屏 14 秒预览、18 秒初始布局"
   }
 ];
-export const levels = [...recordedLevels,level3,level4,level8,level9,...chartLevels].sort((a,b)=>a.id-b.id);
+export function initialTrayCapacity(level){
+  const beads=level.target.reduce((count,row)=>count+[...row].filter(color=>color!=='.').length,0);
+  const sixth=beads/6;
+  return sixth<24?12:Math.ceil(sixth/12)*12;
+}
+function withTrayRules(level){
+  const trayColumns=level.id===9?24:12;
+  return {...level,capacity:initialTrayCapacity(level),trayColumns,trayExpansion:trayColumns,trayMaxExpansions:level.id===9?8:2};
+}
+export const levels = [...recordedLevels,level3,level4,level8,level9,...chartLevels].sort((a,b)=>a.id-b.id).map(withTrayRules);

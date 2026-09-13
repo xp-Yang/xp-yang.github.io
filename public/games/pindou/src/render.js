@@ -1,6 +1,6 @@
 import {locked,targetAt} from './engine.js';
 import {levels} from './levels.js';
-import {layout,BOARD_TOP,BOARD_BOTTOM,inBoardArea,geometry,TRAY_SLOT_SIZE,TRAY_BEAD_SIZE,TRAY_PITCH_X,TRAY_PITCH_Y} from './viewport.js';
+import {layout,BOARD_TOP,BOARD_BOTTOM,inBoardArea,geometry} from './viewport.js';
 import {drawSmoothGem} from './quality.js';
 import {PORTRAIT_COLORS} from './portrait-colors.js';
 export {layout} from './viewport.js';
@@ -8,14 +8,21 @@ export const COLORS={R:'#ff3c2e',G:'#38b723',Y:'#fac20a',M:'#8c3649',B:'#a64f16'
 export {ASSET_NAMES,loadAssets} from './assets.js';
 Object.assign(COLORS,PORTRAIT_COLORS);
 export function point(level,state,zone,index,l=layout(level,state)){
-  if(zone==='tray')return {x:l.trayX+(index%l.cols)*TRAY_PITCH_X,y:l.trayY+Math.floor(index/l.cols)*TRAY_PITCH_Y,size:TRAY_BEAD_SIZE};
+  if(zone==='tray'){
+    const row=Math.floor(index/l.cols),rowLength=Math.min(l.cols,state.tray.length-row*l.cols),offset=(l.cols-rowLength)*l.trayPitchX/2;
+    return {x:l.trayX+offset+(index%l.cols)*l.trayPitchX,y:l.trayY+row*l.trayPitchY,size:l.trayBeadSize};
+  }
   const w=level.target[0].length;
   return {x:l.boardX(level.board.x+(index%w)*level.board.pitch),y:l.boardY(level.board.y+Math.floor(index/w)*level.board.pitch),size:level.board.size*l.scale};
 }
 export function hitTest(level,state,x,y){
   const l=layout(level,state),w=level.target[0].length;
   const c=Math.round((l.worldX(x)-level.board.x)/level.board.pitch),r=Math.round((l.worldY(y)-level.board.y)/level.board.pitch);
-  if(state.status!=='won'&&x>=l.trayLeft&&x<=l.trayLeft+l.trayWidth&&y>=l.trayTop&&y<l.trayBottom){const col=Math.max(0,Math.min(l.cols-1,Math.round((x-l.trayX)/TRAY_PITCH_X))),row=Math.max(0,Math.min(l.rows-1,Math.round((y-l.trayY)/TRAY_PITCH_Y))),index=row*l.cols+col;if(index<state.tray.length)return {zone:'tray',index};}
+  if(state.status!=='won'&&x>=l.trayLeft&&x<=l.trayLeft+l.trayWidth&&y>=l.trayTop&&y<l.trayBottom){
+    const row=Math.max(0,Math.min(l.rows-1,Math.round((y-l.trayY)/l.trayPitchY))),rowLength=Math.min(l.cols,state.tray.length-row*l.cols),offset=(l.cols-rowLength)*l.trayPitchX/2;
+    const col=l.trayPitchX?Math.max(0,Math.min(rowLength-1,Math.round((x-l.trayX-offset)/l.trayPitchX))):0,index=row*l.cols+col;
+    if(index<state.tray.length)return {zone:'tray',index};
+  }
   if(inBoardArea(level,state,{x,y})&&r>=0&&r<level.target.length&&c>=0&&c<w&&level.target[r][c]!=='.')return {zone:'board',index:r*w+c};
   return null;
 }
@@ -152,21 +159,26 @@ function drawStatic(ctx,assets,level,state,view,l,gem=drawSmoothGem){
     ctx.restore();
   }
 }
-function drawFloatingUI(ctx,assets,level,state,view,l,gem){
+function drawTrayUI(ctx,assets,level,state,view,l,gem){
   if(state.status!=='won'){
   ctx.save();ctx.shadowColor='#35314e30';ctx.shadowBlur=14;ctx.shadowOffsetY=3;
   round(ctx,l.trayLeft,l.trayTop,l.trayWidth,l.trayHeight,14,'#f8f8f8eb');ctx.restore();
   const moving=new Set(view.flights?.filter(f=>f.toZone==='tray').map(f=>f.to)||[]);
   const selected=new Set(state.selection?.zone==='tray'?state.selection.ids:[]);
   for(let i=0;i<state.tray.length;i++){
-    const p=point(level,state,'tray',i,l);drawWell(ctx,{...p,size:TRAY_SLOT_SIZE},COLORS.W);
+    const p=point(level,state,'tray',i,l);drawWell(ctx,{...p,size:l.traySlotSize},COLORS.W);
     if(state.tray[i]&&!moving.has(i))drawGem(ctx,assets,state.tray[i],p,{selected:selected.has(i)},gem);
   }
   }
+}
+function drawHud(ctx,assets,level,state){
   drawSettings(ctx);
   drawProgress(ctx,level,state);drawTimer(ctx,assets,state);
 }
 function drawDynamic(ctx,assets,level,state,view,t,l,gem=drawSmoothGem){
+  // The tray is a destination surface. Draw it before flights so incoming
+  // beads remain visible until they settle into their slots.
+  drawTrayUI(ctx,assets,level,state,view,l,gem);
   for(const f of view.flights||[]){
     const progress=Math.min(1,Math.max(0,(t-f.start)/f.duration)),ease=1-(1-progress)**3,a=f.fromPoint,b=point(level,state,f.toZone,f.to,l);
     const p={x:a.x+(b.x-a.x)*ease,y:a.y+(b.y-a.y)*ease-Math.sin(progress*Math.PI)*70,size:a.size+(b.size-a.size)*ease};
@@ -176,7 +188,7 @@ function drawDynamic(ctx,assets,level,state,view,t,l,gem=drawSmoothGem){
     const age=(t-s.start)/(s.duration??650);if(age<0||age>1)continue;
     const p=point(level,state,'board',s.index,l),rad=p.size*.6*Math.sin(age*Math.PI);if(!visible(p,l))continue;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(age);ctx.fillStyle=`rgba(255,255,255,${1-age})`;ctx.beginPath();for(let j=0;j<8;j++){const r=j%2?rad*.2:rad;ctx.lineTo(Math.cos(j*Math.PI/4)*r,Math.sin(j*Math.PI/4)*r);}ctx.closePath();ctx.fill();ctx.restore();
   }
-  drawFloatingUI(ctx,assets,level,state,view,l,gem);
+  drawHud(ctx,assets,level,state);
   if(view.tutorial&&state.status==='playing')drawTutorial(ctx,assets,level,state,t,l);
 }
 export function render(ctx,assets,level,state,view,t){const l=layout(level,state);drawStatic(ctx,assets,level,state,view,l);drawDynamic(ctx,assets,level,state,view,t,l);}

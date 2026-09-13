@@ -53,7 +53,7 @@ function baseControls(){
   const l=layout(level,state);
   const finished=state.status==='won';
   controls.innerHTML='<button class="hotspot" style="left:10px;top:17px;width:64px;height:58px" data-action="settings" aria-label="设置"></button>'+
-    (finished?'':'<button class="tray-expand" data-action="expand" aria-label="加仓，增加十二格暂存空间" style="left:'+l.expandX+'px;top:'+l.expandY+'px" '+(!canExpandTray(state)?'disabled':'')+'><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button>')+
+    (finished?'':'<button class="tray-expand" data-action="expand" aria-label="加仓，增加'+state.trayStep+'格暂存空间" style="left:'+l.expandX+'px;top:'+l.expandY+'px" '+(!canExpandTray(state)?'disabled':'')+'><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button>')+
     (testMode&&!finished?'<button class="auto-play-floating" data-action="auto-play">一键自动通关</button>':'');
   updateTestControls();
 }
@@ -117,7 +117,7 @@ function act(action){
   if(busy&&!modal&&action!=='settings')return;
   if(action==='close'){clearModal();return;}
   if(action==='settings'){showSettings();return;}
-  if(action==='expand'){if(state.status!=='playing')return;if(expandTray(state)){baseControls();sound('place');save();toast('已增加 12 格暂存空间');}else toast('暂存区已扩展至上限');return;}
+  if(action==='expand'){if(state.status!=='playing')return;const amount=state.trayStep||12;if(expandTray(state)){baseControls();sound('place');save();toast(`已增加 ${amount} 格暂存空间`);}else toast('暂存区已扩展至上限');return;}
   if(action.startsWith('locked-')){toast(`第 ${action.split('-')[1]} 关解锁`);return;}
   if(action==='unavailable'){toast('该页面尚未补充原版参考');return;}
   if(action==='home'){showHome();return;}
