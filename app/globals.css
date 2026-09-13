@@ -113,6 +113,46 @@
   }
 }
 
+/* Only the document scrollbar is replaced. Code blocks, embedded demos and
+   parameter panels retain their own native scrollbars. The root rule is present
+   on first paint, so hydration and route changes never change viewport width. */
+.site-scrollbar { display: none; }
+@media (pointer: fine) and (forced-colors: none) {
+  html[data-scrollbar='overlay'] { scrollbar-width: none; scrollbar-gutter: auto; }
+  html[data-scrollbar='overlay']::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  .site-scrollbar {
+    display: block;
+    position: fixed;
+    top: 80px;
+    right: 2px;
+    bottom: 16px;
+    width: 24px;
+    z-index: 90;
+    touch-action: none;
+    user-select: none;
+    cursor: pointer;
+    visibility: hidden;
+  }
+  .site-scrollbar[data-visible='true'] { visibility: visible; }
+  .site-scrollbar-thumb {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 6px;
+    width: 3px;
+    border-radius: 999px;
+    background: #a0a5ad;
+    opacity: 0;
+    transition: opacity 250ms ease, width 160ms ease, background-color 160ms ease;
+  }
+  .site-scrollbar[data-active='true'] .site-scrollbar-thumb { opacity: 0.8; }
+  .site-scrollbar:hover .site-scrollbar-thumb,
+  .site-scrollbar:focus-visible .site-scrollbar-thumb,
+  .site-scrollbar[data-dragging='true'] .site-scrollbar-thumb { opacity: 1; width: 6px; background: #b6bdc7; }
+  .site-scrollbar:focus-visible { outline: 1px solid #73b7ff; outline-offset: 0; border-radius: 12px; }
+  .site-scrollbar[data-dragging='true'] { cursor: grabbing; }
+}
+
 .work-thumbnail {
   background-color: #111316;
   background-position: center;
