@@ -15,7 +15,7 @@ export default function WorksPage() {
 
   return (
     <main className="min-h-screen bg-[#050608]">
-      <PageHeader {...contentLabels.Project} count={items.length} />
+      <PageHeader eyebrow={contentLabels.Project.eyebrow} title={contentLabels.Project.title} count={items.length} />
       <section className="site-shell pb-16 pt-10 md:pt-14">
         {items.length > 0 ? (
           <WorksGallery items={items} />
