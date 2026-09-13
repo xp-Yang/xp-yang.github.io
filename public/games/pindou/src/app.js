@@ -144,6 +144,7 @@ function handleTap(hit){
     busy=true;const now=performance.now();
     const l=layout(level,state);
     flights=result.moves.map((m,i)=>({...m,fromPoint:point(level,state,m.fromZone,m.from,l),start:now+i*Math.min(24,240/result.moves.length),duration:330}));
+    flights.push(...(result.relocations||[]).map(m=>({...m,fromPoint:point(level,state,m.fromZone,m.from,l),start:now,duration:330})));
     sparkles=result.moves.filter(m=>m.toZone==='board').map((m,i)=>({index:m.to,start:now+330+i*Math.min(24,240/result.moves.length)}));
     if(level.id===1&&!profile.tutorialDone){if(hit.zone==='tray')state.tutorialStep=2;else if(result.moves[0].color==='R')state.tutorialStep=4;else state.tutorialStep=6;}
     sound('place');wonAt=state.status==='won'?flights.at(-1).start+850:0;

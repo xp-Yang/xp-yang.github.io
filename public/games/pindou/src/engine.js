@@ -45,8 +45,27 @@ export function move(level,state,zone,index) {
   }
   const remaining=selected.ids.slice(count);
   state.selection=remaining.length?{...selected,ids:remaining}:null;
+  const relocations=compactTray(state,moves);
   if(isComplete(level,state))state.status='won';
-  return {moves,reason:''};
+  return {moves,relocations,reason:''};
+}
+// Stable packing keeps stored colors in arrival order and selection on the same beads.
+function compactTray(state,moves=[]){
+  const incoming=new Map(moves.filter(m=>m.toZone==='tray').map(m=>[m.to,m]));
+  const positions=new Map(),relocations=[];let next=0;
+  for(let from=0;from<state.tray.length;from++){
+    const color=state.tray[from];if(color===null)continue;
+    const to=next++;positions.set(from,to);
+    if(incoming.has(from))incoming.get(from).to=to;
+    else if(from!==to)relocations.push({fromZone:'tray',from,toZone:'tray',to,color});
+    state.tray[to]=color;
+  }
+  state.tray.fill(null,next);
+  if(state.selection?.zone==='tray'){
+    state.selection.ids=state.selection.ids.map(i=>positions.get(i));
+    state.selection.anchor=positions.get(state.selection.anchor)??state.selection.ids[0];
+  }
+  return relocations;
 }
 // UI clicks and touch taps share the same selection/cancellation rules.
 export function interact(level,state,hit){

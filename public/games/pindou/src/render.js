@@ -72,6 +72,12 @@ function drawTimer(ctx,assets,state){
   ctx.drawImage(assets.clock,283,61,50,55);
 }
 function visible(p,l,pad=p.size){return p.x+pad>=0&&p.x-pad<=720&&p.y+pad>=BOARD_TOP&&p.y-pad<l.trayTop;}
+function drawWell(ctx,p,base=null){
+  const x=p.x-p.size/2,y=p.y-p.size/2,r=p.size*.28;
+  if(base)round(ctx,x,y,p.size,p.size,r,base);
+  const well=ctx.createLinearGradient(0,y,0,y+p.size);well.addColorStop(0,'#0005');well.addColorStop(1,'#0001');
+  round(ctx,x,y,p.size,p.size,r,well);
+}
 function drawStatic(ctx,assets,level,state,view,l,gem=drawSmoothGem,reuse=null,capture=null){
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
   if(reuse){
@@ -98,12 +104,12 @@ function drawStatic(ctx,assets,level,state,view,l,gem=drawSmoothGem,reuse=null,c
     ctx.fillStyle=COLORS[color];ctx.fillRect(p.x-pitch/2-.2,p.y-pitch/2-.2,pitch+.4,pitch+.4);
   }
   for(const {p} of cells){
-    const well=ctx.createLinearGradient(0,p.y-p.size/2,0,p.y+p.size/2);well.addColorStop(0,'#0005');well.addColorStop(1,'#0001');round(ctx,p.x-p.size/2,p.y-p.size/2,p.size,p.size,p.size*.28,well);
+    drawWell(ctx,p);
   }ctx.restore();ctx.restore();
 
   if(!reuse){
   round(ctx,28,l.trayTop,664,1104-l.trayTop,18,'#f8f8f8');
-  for(let i=0;i<state.tray.length;i++){const p=point(level,state,'tray',i,l);gem(ctx,'slot',p.x,p.y,39);}
+  for(let i=0;i<state.tray.length;i++){const p=point(level,state,'tray',i,l);drawWell(ctx,{...p,size:39},COLORS.W);}
   ctx.save();ctx.setLineDash([10,7]);round(ctx,30,1034,660,68,15,null,'#939abb',3);ctx.restore();
   ctx.drawImage(assets.expand,298,1041,123,73);ctx.drawImage(assets['locked-tools'],65,1110,588,130);
   }
