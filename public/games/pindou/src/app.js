@@ -51,7 +51,7 @@ function withAssets(group,commit){
 function baseControls(){
   const l=layout(level,state);
   const finished=state.status==='won';
-  controls.innerHTML='<button class="hotspot" style="left:10px;top:17px;width:64px;height:58px" data-action="settings" aria-label="设置"></button>'+
+  controls.innerHTML='<button class="hotspot" style="left:10px;top:23px;width:64px;height:46px" data-action="settings" aria-label="设置"></button>'+
     (finished?'':'<button class="tray-expand" data-action="expand" aria-label="加仓，增加'+state.trayStep+'格暂存空间" style="left:'+l.expandX+'px;top:'+l.expandY+'px" '+(!canExpandTray(state)?'disabled':'')+'><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button>')+
     (testMode&&!finished?'<button class="auto-play-floating" data-action="auto-play">一键自动通关</button>':'');
   updateTestControls();

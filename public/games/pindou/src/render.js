@@ -79,7 +79,7 @@ function drawTopPanel(ctx,x,y,w,h){
   round(ctx,x+.75,y+.75,w-1.5,h-1.5,17.25,null,'#dcd7ea',1.5);
 }
 function drawSettings(ctx){
-  drawTopPanel(ctx,10,17,64,58);
+  drawTopPanel(ctx,10,23,64,46);
   // Vector icons have no baked rectangular image background and stay sharp.
   ctx.save();ctx.translate(42,46);ctx.fillStyle='#8881ae';ctx.lineJoin='round';
   ctx.beginPath();
@@ -92,7 +92,7 @@ function drawSettings(ctx){
   ctx.fill('evenodd');ctx.restore();
 }
 function drawTimer(ctx,assets,state){
-  drawTopPanel(ctx,506,17,190,58);
+  drawTopPanel(ctx,506,23,190,46);
   ctx.save();ctx.translate(533,47);ctx.lineCap='round';ctx.lineJoin='round';
   round(ctx,-5,-23,10,5,2,'#b5915c');
   ctx.strokeStyle='#b5915c';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,-18);ctx.lineTo(0,-14);ctx.moveTo(10,-12);ctx.lineTo(13,-15);ctx.stroke();
