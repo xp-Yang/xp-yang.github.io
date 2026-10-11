@@ -91,10 +91,12 @@ export function BlackHoleBackground({
   controls = DEFAULT_BLACK_HOLE_CONTROLS,
   playbackClassName,
   debugClassName,
+  onReady,
 }: {
   controls?: BlackHoleControls;
   playbackClassName?: string;
   debugClassName?: string;
+  onReady?: () => void;
 } = {}) {
   const mountRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef(controls);
@@ -140,6 +142,7 @@ export function BlackHoleBackground({
 
     if (!gl) {
       setWebglAvailable(false);
+      onReady?.();
       return;
     }
 
@@ -290,6 +293,7 @@ export function BlackHoleBackground({
     }
 
     if (!renderer) {
+      onReady?.();
       geometry.dispose();
       blackbodyTexture.dispose();
       physicsMaterial.dispose();
@@ -560,6 +564,7 @@ export function BlackHoleBackground({
 
     resize();
     renderPipeline();
+    onReady?.();
     window.addEventListener('resize', resize);
     document.addEventListener('visibilitychange', onVisibility);
     canvas.addEventListener('webglcontextlost', onContextLost);
@@ -586,7 +591,7 @@ export function BlackHoleBackground({
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [contextRevision, debugEnabled, motionEnabled]);
+  }, [contextRevision, debugEnabled, motionEnabled, onReady]);
 
   const toggleMotion = () => {
     setMotionEnabled((current) => {

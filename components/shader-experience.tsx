@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Maximize, Pause, Play } from 'lucide-react';
+import { Maximize, Pause, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { type ShaderExample, shaderSource, shaderSourceUrl } from '@/lib/shader-examples';
 import { createShaderRenderer } from '@/lib/shader-renderer';
+import { useWorkReady } from '@/components/work-opening-transition';
+import { WorkExperienceHeader } from '@/components/work-experience-header';
 
 export function ShaderExperience({ example }: { example: ShaderExample }) {
+  const { ready, opening } = useWorkReady(example.slug);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -17,11 +20,11 @@ export function ShaderExperience({ example }: { example: ShaderExample }) {
 
   useEffect(() => {
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-    setPlaying(example.animated && !reduced.matches);
+    setPlaying(example.animated && !reduced.matches && !opening);
     const change = () => { if (reduced.matches) setPlaying(false); };
     reduced.addEventListener('change', change);
     return () => reduced.removeEventListener('change', change);
-  }, [example]);
+  }, [example, opening]);
   useEffect(() => { playingRef.current = playing; }, [playing]);
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export function ShaderExperience({ example }: { example: ShaderExample }) {
     if (!canvas || !stage) return;
     let allocated: ReturnType<typeof createShaderRenderer> | undefined;
     try { allocated = createShaderRenderer(canvas); allocated.load(shaderSource(example.path), example.vertexPath ? shaderSource(example.vertexPath) : undefined); setError(''); }
-    catch (cause) { allocated?.dispose(); console.error(cause); setError('此设备暂时无法运行这个 Shader，可通过源码入口查看。'); return; }
+    catch (cause) { allocated?.dispose(); console.error(cause); setError('此设备暂时无法运行这个 Shader，请尝试启用硬件加速或更换浏览器。'); ready(); return; }
     const renderer = allocated;
     let frame = 0;
     let last = 0;
@@ -78,7 +81,7 @@ export function ShaderExperience({ example }: { example: ShaderExample }) {
     canvas.addEventListener('webglcontextrestored', restored);
     document.addEventListener('visibilitychange', resume);
     stage.addEventListener('shader-playback', resume);
-    resize(); resume();
+    resize(); ready(); resume();
     return () => {
       stopped = true; cancelAnimationFrame(frame); observer.disconnect();
       canvas.removeEventListener('pointermove', move);
@@ -88,20 +91,17 @@ export function ShaderExperience({ example }: { example: ShaderExample }) {
       stage.removeEventListener('shader-playback', resume);
       renderer.dispose();
     };
-  }, [example, revision]);
+  }, [example, revision, ready]);
 
   useEffect(() => { stageRef.current?.dispatchEvent(new Event('shader-playback')); }, [playing]);
 
   return (
-    <main className="relative z-50 min-h-[100svh] bg-[#050608] text-stone-200">
-      <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 md:px-8">
-        <a href="/works/#shader-examples" className="flex min-h-10 items-center gap-2 text-sm text-stone-300 hover:text-white"><ArrowLeft className="size-4" />作品合集</a>
-        <h1 className="text-sm font-medium">{example.title}<span className="ml-3 font-mono text-xs text-stone-500">{example.category}</span></h1>
-        <a href={shaderSourceUrl(example)} target="_blank" rel="noreferrer" className="flex min-h-10 items-center gap-2 text-sm text-stone-300 hover:text-white">源码<ArrowUpRight className="size-4" /></a>
-      </header>
-      <div ref={stageRef} className="relative h-[72svh] min-h-72 bg-black md:h-[calc(100svh-11rem)]">
-        <canvas ref={canvasRef} className="block h-full w-full touch-pan-y" aria-label={`${example.title}实时 Shader`} />
+    <main className="fixed inset-0 z-50 overflow-hidden bg-[#050608] text-stone-200">
+      <WorkExperienceHeader title={example.title} category={example.category} returnHref="/works/#shader-examples" sourceHref={shaderSourceUrl(example)} />
+      <div ref={stageRef} className="absolute inset-0 bg-black">
+        <canvas ref={canvasRef} className="block h-full w-full touch-pan-y" aria-label={`${example.title}实时 Shader`} aria-description={[example.summary, example.credit, example.license].filter(Boolean).join(' · ')} />
         {error && <div role="status" className="absolute inset-0 grid place-items-center bg-[#050608] p-8 text-center text-sm text-stone-400">{error}</div>}
+        {notice && <p role="status" className="absolute bottom-20 left-4 right-4 rounded bg-black/80 px-4 py-2 text-sm text-stone-300 md:right-auto">{notice}</p>}
         <div className="absolute bottom-4 right-4 flex gap-2">
           {example.animated && <Button type="button" variant="outline" className="border-white/20 bg-black/70 text-stone-100" onClick={() => setPlaying(value => !value)} aria-label={playing ? '暂停动画' : '播放动画'}>{playing ? <Pause className="size-4" /> : <Play className="size-4" />}{playing ? '暂停' : '播放'}</Button>}
           <Button type="button" variant="outline" className="border-white/20 bg-black/70 text-stone-100" onClick={async () => {
@@ -110,13 +110,6 @@ export function ShaderExperience({ example }: { example: ShaderExample }) {
           }} aria-label="切换全屏"><Maximize className="size-4" />全屏</Button>
         </div>
       </div>
-      <footer className="space-y-2 border-t border-white/10 px-4 py-5 text-xs leading-6 text-stone-400 md:px-8">
-        {notice && <p role="status">{notice}</p>}
-        <p className="text-sm">{example.summary}</p>
-        {example.vertexPath && <p><a href="/shaders/pristineGrid.vs" target="_blank" rel="noreferrer" className="underline underline-offset-4">顶点 Shader 源码</a></p>}
-        {example.credit && <p>{example.credit}{example.license && <> · <a className="underline underline-offset-4" href="https://creativecommons.org/licenses/by-nc-sa/3.0/" target="_blank" rel="noreferrer">{example.license}</a></>}</p>}
-        <p className="font-mono text-[11px] text-stone-500">{example.path} · WebGL2 运行适配，保留仓库原始效果</p>
-      </footer>
     </main>
   );
 }

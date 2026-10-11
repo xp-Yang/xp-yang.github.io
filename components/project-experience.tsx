@@ -1,9 +1,7 @@
 'use client';
 
-import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type PointerEvent,
@@ -13,6 +11,8 @@ import {
 import { BlackHoleBackground } from '@/components/black-hole-background';
 import { BlackHoleControlPanel } from '@/components/black-hole-control-panel';
 import { PROJECT_ORIGIN_KEY } from '@/components/works-gallery';
+import { useWorkReady } from '@/components/work-opening-transition';
+import { WorkExperienceHeader } from '@/components/work-experience-header';
 import {
   clampBlackHoleControls,
   DEFAULT_BLACK_HOLE_CONTROLS,
@@ -41,12 +41,12 @@ function readOrigin(slug: string): StoredOrigin | null {
 export function ProjectExperience({
   item,
   index,
-  total,
 }: {
   item: ContentItem;
   index: number;
   total: number;
 }) {
+  const { ready } = useWorkReady(item.slug);
   const [closingTransform, setClosingTransform] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const [blackHoleControls, setBlackHoleControls] = useState<BlackHoleControls>(
@@ -58,11 +58,8 @@ export function ProjectExperience({
     null,
   );
   const isBlackHole = item.slug === 'schwarzschild-event-horizon';
+  useEffect(() => { if (!isBlackHole) ready(); }, [isBlackHole, ready]);
   const visualClass = `work-thumbnail-${(index % 11) + 1}`;
-  const technologies = useMemo(
-    () => item.project?.tech ?? item.tags,
-    [item.project?.tech, item.tags],
-  );
 
   useEffect(() => {
     const previousOverflow = document.documentElement.style.overflow;
@@ -150,6 +147,7 @@ export function ProjectExperience({
     >
       {isBlackHole ? (
         <BlackHoleBackground
+          onReady={ready}
           controls={blackHoleControls}
           playbackClassName="bottom-4 left-4 right-auto md:bottom-5 md:left-5"
           debugClassName="left-4 right-auto md:left-auto md:right-[24rem]"
@@ -160,7 +158,6 @@ export function ProjectExperience({
           aria-hidden="true"
         />
       )}
-      <div className="pointer-events-none absolute inset-0 z-[2] bg-[linear-gradient(180deg,rgba(3,4,6,.74)_0%,rgba(3,4,6,.04)_28%,rgba(3,4,6,.16)_54%,rgba(3,4,6,.95)_100%)]" />
 
       {isBlackHole && (
         <div
@@ -174,23 +171,7 @@ export function ProjectExperience({
         />
       )}
 
-      <header className="absolute inset-x-0 top-0 z-40 grid h-16 grid-cols-[1fr_auto_1fr] items-center border-b border-white/10 bg-black/25 px-4 backdrop-blur-md md:px-8">
-        <button
-          type="button"
-          onClick={close}
-          className="flex min-h-11 w-fit items-center gap-2 text-left font-mono text-[10px] uppercase tracking-wider text-stone-300 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
-        >
-          <ArrowLeft className="size-4" />
-          所有作品
-        </button>
-        <span className="font-mono text-[10px] uppercase tracking-wider text-stone-500">
-          Project {String(index + 1).padStart(2, '0')} /{' '}
-          {String(total).padStart(2, '0')}
-        </span>
-        <span className="justify-self-end font-mono text-[10px] uppercase tracking-wider text-stone-400">
-          {item.placeholder ? 'Concept placeholder' : 'Realtime model'}
-        </span>
-      </header>
+      <WorkExperienceHeader title={item.title} onBack={close} />
 
       {isBlackHole && (
         <BlackHoleControlPanel
@@ -200,40 +181,6 @@ export function ProjectExperience({
           }
         />
       )}
-
-      <section className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-16 md:px-8 md:pb-10">
-        <div className="grid items-end gap-7 border-t border-white/15 pt-7 md:grid-cols-[minmax(0,1.1fr)_minmax(18rem,.65fr)] md:gap-14">
-          <div>
-            <p className="eyebrow mb-4 text-[#ffad61]">
-              {technologies.join(' · ')}
-            </p>
-            <h1 className="max-w-4xl text-balance text-4xl font-medium leading-none tracking-[-0.05em] md:text-7xl">
-              {item.title}
-            </h1>
-          </div>
-          <div>
-            <p className="max-w-xl text-sm leading-7 text-stone-300 md:text-base md:leading-8">
-              {item.summary}
-            </p>
-            {item.placeholder && (
-              <p className="mt-4 font-mono text-[10px] uppercase tracking-wider text-[#ffad61]">
-                示例项目 · 等待真实内容替换
-              </p>
-            )}
-            {item.project?.sourceUrl && (
-              <a
-                href={item.project.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="pointer-events-auto mt-5 inline-flex items-center gap-2 text-sm text-stone-300 hover:text-white"
-              >
-                查看源码
-                <ArrowUpRight className="size-4" />
-              </a>
-            )}
-          </div>
-        </div>
-      </section>
     </main>
   );
 }

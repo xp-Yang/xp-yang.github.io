@@ -1,94 +1,13 @@
 'use client';
 
-import { type MouseEvent, useEffect, useRef, useState } from 'react';
-
+import { useWorkOpeningTransition } from '@/components/work-opening-transition';
 import { contentHref } from '@/lib/content';
 import type { ContentItem } from '@/types/content';
 
-export const PROJECT_ORIGIN_KEY = 'event-horizon-project-origin';
-
-type OpeningProject = {
-  item: ContentItem;
-  index: number;
-  rect: { left: number; top: number; width: number; height: number };
-  expanded: boolean;
-};
-
-function hasModifiedClick(event: MouseEvent<HTMLAnchorElement>) {
-  return (
-    event.button !== 0 ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.shiftKey ||
-    event.altKey
-  );
-}
+export { PROJECT_ORIGIN_KEY } from '@/components/work-opening-transition';
 
 export function WorksGallery({ items }: { items: ContentItem[] }) {
-  const [opening, setOpening] = useState<OpeningProject | null>(null);
-  const navigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (navigationTimer.current) clearTimeout(navigationTimer.current);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const restoreGallery = () => setOpening(null);
-    window.addEventListener('pageshow', restoreGallery);
-    return () => window.removeEventListener('pageshow', restoreGallery);
-  }, []);
-
-  const openProject = (
-    event: MouseEvent<HTMLAnchorElement>,
-    item: ContentItem,
-    index: number,
-  ) => {
-    if (hasModifiedClick(event)) return;
-    const reducedMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches;
-    if (reducedMotion) return;
-
-    const thumbnail = event.currentTarget.querySelector<HTMLElement>(
-      '[data-project-thumbnail]',
-    );
-    if (!thumbnail) return;
-    event.preventDefault();
-
-    const bounds = thumbnail.getBoundingClientRect();
-    const rect = {
-      left: bounds.left,
-      top: bounds.top,
-      width: bounds.width,
-      height: bounds.height,
-    };
-    window.sessionStorage.setItem(
-      PROJECT_ORIGIN_KEY,
-      JSON.stringify({
-        slug: item.slug,
-        rect,
-        scrollY: window.scrollY,
-        viewport: { width: window.innerWidth, height: window.innerHeight },
-      }),
-    );
-
-    setOpening({ item, index, rect, expanded: false });
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        setOpening((current) =>
-          current ? { ...current, expanded: true } : null,
-        );
-      }),
-    );
-
-    navigationTimer.current = setTimeout(
-      () => window.location.assign(contentHref(item)),
-      620,
-    );
-  };
+  const { openWork } = useWorkOpeningTransition();
 
   return (
     <>
@@ -97,7 +16,12 @@ export function WorksGallery({ items }: { items: ContentItem[] }) {
           <article key={item.id}>
             <a
               href={contentHref(item)}
-              onClick={(event) => openProject(event, item, index)}
+              onClick={(event) => openWork(event, {
+                slug: item.slug,
+                href: contentHref(item),
+                className: `work-thumbnail work-thumbnail-${(index % 11) + 1}`,
+                visual: item.cover && <img src={item.cover} alt="" className="absolute inset-0 h-full w-full object-cover" style={item.slug === 'schwarzschild-event-horizon' ? { objectPosition: '50% 45%' } : undefined} />,
+              })}
               className="group block outline-none"
               aria-label={`打开作品：${item.title}`}
             >
@@ -130,24 +54,6 @@ export function WorksGallery({ items }: { items: ContentItem[] }) {
         ))}
       </div>
 
-      {opening && (
-        <div
-          aria-hidden="true"
-          className={`fixed inset-0 z-[60] overflow-hidden bg-[#050608] transition-[transform,border-radius] duration-[600ms] ease-[cubic-bezier(.22,.72,.15,1)] work-thumbnail work-thumbnail-${(opening.index % 11) + 1}`}
-          style={{
-            transformOrigin: '0 0',
-            transform: opening.expanded
-              ? 'translate3d(0,0,0) scale(1)'
-              : `translate3d(${opening.rect.left}px,${opening.rect.top}px,0) scale(${opening.rect.width / window.innerWidth},${opening.rect.height / window.innerHeight})`,
-            borderRadius: opening.expanded ? 0 : 12,
-          }}
-        >
-          {opening.item.cover && <img src={opening.item.cover} alt="" className="absolute inset-0 h-full w-full object-cover" style={opening.item.slug === 'schwarzschild-event-horizon' ? { objectPosition: '50% 45%' } : undefined} />}
-          <div
-            className={`absolute inset-0 bg-[#050608]/45 transition-opacity duration-300 ${opening.expanded ? 'opacity-100 delay-200' : 'opacity-0'}`}
-          />
-        </div>
-      )}
     </>
   );
 }

@@ -16,6 +16,7 @@ export function createViewport(
   onError: (message: string) => void,
   onFps: (fps: number) => void = () => {},
   onRefining: (refining: boolean) => void = () => {},
+  onReady: () => void = () => {},
 ) {
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -50,6 +51,7 @@ export function createViewport(
   scene.add(group);
   let batches: RenderBatch[] = [];
   let model: GcodeModel | null = null;
+  let presented = false;
   let grid: THREE.GridHelper | null = null;
   let disposed = false,
     contextFailed = false;
@@ -89,6 +91,10 @@ export function createViewport(
         if (disposed || contextFailed) return;
         renderer.render(scene, camera);
         renderedFrames++;
+        if (model && !presented) {
+          presented = true;
+          onReady();
+        }
       },
       sample: () => progressive.sample(),
       reset: () => progressive.reset(),

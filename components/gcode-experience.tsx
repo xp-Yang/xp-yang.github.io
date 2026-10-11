@@ -1,8 +1,6 @@
 'use client';
 
 import {
-  ArrowLeft,
-  ArrowUpRight,
   Box,
   ChevronDown,
   FileCode2,
@@ -20,6 +18,8 @@ import {
   type DragEvent,
 } from 'react';
 import { createSampleGcode } from '@/lib/gcode/sample';
+import { useWorkReady } from '@/components/work-opening-transition';
+import { WorkExperienceHeader } from '@/components/work-experience-header';
 import {
   MAX_FILE_BYTES,
   ROLES,
@@ -42,6 +42,7 @@ const DEFAULT_RANGE: ViewRange = {
 };
 
 export function GcodeExperience() {
+  const { ready } = useWorkReady('gcode-preview');
   const host = useRef<HTMLDivElement>(null);
   const viewport = useRef<Viewport | null>(null);
   const worker = useRef<Worker | null>(null);
@@ -165,6 +166,7 @@ export function GcodeExperience() {
             setGraphicsError,
             setFps,
             setRefining,
+            ready,
           );
           if (currentModel.current) {
             viewport.current.setModel(currentModel.current);
@@ -189,7 +191,11 @@ export function GcodeExperience() {
       viewport.current = null;
       document.documentElement.style.overflow = oldOverflow;
     };
-  }, [loadSample]);
+  }, [loadSample, ready]);
+
+  useEffect(() => {
+    if (error || graphicsError) ready();
+  }, [error, graphicsError, ready]);
 
   const topLayer = model?.layers[range.high];
   const percent = topLayer
@@ -229,27 +235,7 @@ export function GcodeExperience() {
       }}
       onDrop={onDrop}
     >
-      <header className={styles.header}>
-        {/* Native navigation matches the site's static Pages routing and gallery transition. */}
-        {/* oxlint-disable-next-line next/no-html-link-for-pages */}
-        <a href="/works/" aria-label="所有作品" className={styles.back}>
-          <ArrowLeft size={15} />
-          <span>所有作品</span>
-        </a>
-        <div className={styles.wordmark}>
-          <span className={styles.liveDot} /> TOOLPATH{' '}
-          <span className={styles.headerSlash}>/</span>{' '}
-          <span className={styles.headerSub}>GCODE EXPLORER</span>
-        </div>
-        <a
-          className={styles.sourceLink}
-          href="https://github.com/xp-Yang/XPYEngine/tree/main/samples/GcodePreview"
-          target="_blank"
-          rel="noreferrer"
-        >
-          XPYEngine <ArrowUpRight size={14} />
-        </a>
-      </header>
+      <WorkExperienceHeader title="GCode 走线预览" />
 
       <div className={styles.workspace}>
         <section className={styles.stage} aria-label="走线预览">
@@ -589,13 +575,6 @@ export function GcodeExperience() {
           </div>
         </aside>
       </div>
-      <footer className={styles.footer}>
-        <span>
-          XPYENGINE <i>→</i> WEB EXPERIMENT
-        </span>
-        <span>每一条指令，都有迹可循。</span>
-        <span>THREE.JS / WEBGL 2</span>
-      </footer>
       {dragging && (
         <div className={styles.dropOverlay}>
           <FolderOpen size={40} />

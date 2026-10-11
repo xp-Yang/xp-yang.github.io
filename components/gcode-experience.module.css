@@ -1,4 +1,5 @@
 .experience {
+  --controls-width: 326px;
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -32,37 +33,6 @@
   outline: 2px solid #ffac72;
   outline-offset: 4px;
 }
-.header {
-  height: 65px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 30px;
-  border-bottom: 1px solid #ffffff12;
-  background: #090d13;
-}
-.back,
-.sourceLink {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: #8e98a6;
-  font-size: 11px;
-  text-decoration: none;
-}
-.back:hover,
-.sourceLink:hover {
-  color: #fff;
-}
-.wordmark {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font: 12px monospace;
-  letter-spacing: 2px;
-  color: #e2e8ed;
-}
 .liveDot {
   display: inline-block;
   flex-shrink: 0;
@@ -72,22 +42,16 @@
   background: #faa66a;
   box-shadow: 0 0 10px #fa9e6a33;
 }
-.headerSlash {
-  margin: 0 6px;
-  color: #46515f;
-}
-.headerSub {
-  font-size: 10px;
-  color: #6f7b8b;
-  letter-spacing: 1.4px;
-}
 .workspace {
+  position: absolute;
+  inset: 0;
   flex: 1;
   min-height: 0;
   display: flex;
 }
 .stage {
-  position: relative;
+  position: absolute;
+  inset: 0;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -106,7 +70,7 @@
 }
 .titleBlock {
   position: absolute;
-  top: 36px;
+  top: 100px;
   left: 38px;
   pointer-events: none;
 }
@@ -147,8 +111,8 @@
 }
 .stageTools {
   position: absolute;
-  top: 28px;
-  right: 26px;
+  top: 92px;
+  right: calc(var(--controls-width) + 48px);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -218,7 +182,7 @@
 .modelBadge {
   position: absolute;
   bottom: 74px;
-  right: 30px;
+  right: calc(var(--controls-width) + 48px);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -250,9 +214,16 @@
   color: #576476;
 }
 .panel {
-  width: 326px;
+  position: absolute;
+  top: 80px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  width: var(--controls-width);
   flex-shrink: 0;
-  border-left: 1px solid #ffffff12;
+  border: 1px solid #ffffff12;
+  border-radius: 8px;
+  overflow: hidden;
   background: #0d1219;
   display: flex;
   flex-direction: column;
@@ -649,30 +620,6 @@
   padding: 8px 16px;
   border-radius: 4px;
 }
-.footer {
-  height: 32px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 30px;
-  border-top: 1px solid #ffffff10;
-  background: #090d13;
-  color: #475565;
-  font: 8px monospace;
-  letter-spacing: 1px;
-}
-.footer i {
-  font-style: normal;
-  color: #a17859;
-  margin: 0 10px;
-}
-.footer > span:nth-child(2) {
-  font-family: Arial, 'Microsoft YaHei', sans-serif;
-  letter-spacing: 2px;
-  font-size: 9px;
-  color: #5f6c7c;
-}
 .mobileToggle {
   display: none;
 }
@@ -700,11 +647,11 @@
   color: #8c9cae;
 }
 @media (min-width: 1500px) {
-  .panel {
-    width: 360px;
+  .experience {
+    --controls-width: 360px;
   }
   .titleBlock {
-    top: 46px;
+    top: 110px;
     left: 46px;
   }
   .fileSection,
@@ -717,8 +664,8 @@
   }
 }
 @media (max-width: 1050px) {
-  .panel {
-    width: 295px;
+  .experience {
+    --controls-width: 295px;
   }
   .fileSection,
   .layerSection,
@@ -727,7 +674,7 @@
   }
   .titleBlock {
     left: 25px;
-    top: 26px;
+    top: 90px;
   }
   .titleBlock h1 {
     font-size: 34px;
@@ -756,31 +703,11 @@
   }
 }
 @media (max-width: 700px) {
-  .header {
-    height: 54px;
-    padding: 0 16px;
+  .experience {
+    --mobile-controls-height: 55px;
   }
-  .back span {
-    display: none;
-  }
-  .wordmark {
-    font-size: 10px;
-    letter-spacing: 1px;
-    gap: 7px;
-  }
-  .headerSub {
-    font-size: 7px;
-    letter-spacing: 0.7px;
-  }
-  .headerSlash {
-    margin: 0 2px;
-  }
-  .sourceLink {
-    font-size: 8px;
-    gap: 3px;
-  }
-  .sourceLink svg {
-    width: 11px;
+  .controlsExpanded {
+    --mobile-controls-height: 53dvh;
   }
   .workspace {
     flex-direction: column;
@@ -790,7 +717,7 @@
     min-height: 180px;
   }
   .titleBlock {
-    top: 24px;
+    top: 88px;
     left: 22px;
   }
   .titleBlock h1 {
@@ -811,7 +738,7 @@
     display: none;
   }
   .stageTools {
-    top: 21px;
+    top: 85px;
     right: 18px;
   }
   .stageTools button {
@@ -820,13 +747,13 @@
   }
   .axisBadge {
     left: 22px;
-    bottom: 55px;
+    bottom: calc(var(--mobile-controls-height) + 55px);
     font-size: 9px;
   }
   .modelBadge {
     left: auto;
     right: 20px;
-    bottom: 57px;
+    bottom: calc(var(--mobile-controls-height) + 57px);
     font-size: 6px;
     gap: 5px;
     letter-spacing: 0.5px;
@@ -836,7 +763,7 @@
   }
   .gestures {
     left: 22px;
-    bottom: 22px;
+    bottom: calc(var(--mobile-controls-height) + 22px);
     font-size: 8px;
   }
   .gestures .touchHint {
@@ -844,11 +771,17 @@
     font-size: 8px;
   }
   .panel {
+    top: auto;
+    right: 0;
+    bottom: 0;
     width: 100%;
     height: 55px;
     max-height: 58dvh;
     flex-shrink: 0;
     border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-radius: 0;
     border-top: 1px solid #ffffff1c;
     background: #0f151e;
     transition: height 0.2s;
@@ -907,16 +840,6 @@
   }
   .panelFoot {
     padding: 20px 24px;
-  }
-  .footer {
-    height: 27px;
-    padding: 0 18px;
-  }
-  .footer > span:nth-child(2) {
-    display: none;
-  }
-  .footer {
-    font-size: 6px;
   }
   .graphicsError {
     inset: 25% 6% auto;

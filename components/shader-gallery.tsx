@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useWorkOpeningTransition } from '@/components/work-opening-transition';
 import { shaderExamples, shaderSource } from '@/lib/shader-examples';
 import { createShaderRenderer } from '@/lib/shader-renderer';
 
 export function ShaderGallery() {
   const root = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState<string[]>([]);
+  const { openWork } = useWorkOpeningTransition();
 
   useEffect(() => {
     let cancelled = false;
@@ -49,21 +51,37 @@ export function ShaderGallery() {
   }, []);
 
   return (
-    <div ref={root} className="grid grid-cols-1 gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {shaderExamples.map((example, index) => (
-        <article key={example.slug}>
-          <a href={`/works/shaders/${example.slug}/`} className="group block rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#ff9f43]" aria-label={`打开 Shader：${example.title}`}>
-            <div className="relative aspect-[4/3] overflow-hidden bg-[#0c0e13] transition-transform duration-300 group-hover:scale-[0.985]">
-              <canvas data-shader={example.slug} width={400} height={300} className="h-full w-full object-cover" role="img" aria-label={`${example.title}的实际 Shader 静止预览`} />
-              {failed.includes(example.slug) && <span className="absolute inset-0 grid place-content-center px-4 text-center text-sm text-stone-400">预览暂不可用<br /><span className="mt-2 text-xs">仍可打开实例与源码</span></span>}
-            </div>
-            <div className="mt-3 flex items-baseline justify-between gap-3">
-              <h3 className="text-sm font-normal text-stone-200 group-hover:text-white"><span className="mr-2 font-mono text-[10px] text-stone-500">S{String(index + 1).padStart(2, '0')}</span>{example.title}</h3>
-              <span className="font-mono text-[10px] text-stone-500">{example.category}</span>
-            </div>
-          </a>
-        </article>
-      ))}
-    </div>
+    <>
+      <div ref={root} className="grid grid-cols-1 gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {shaderExamples.map((example, index) => (
+          <article key={example.slug}>
+            <a href={`/works/shaders/${example.slug}/`} onClick={(event) => {
+              const preview = event.currentTarget.querySelector<HTMLCanvasElement>('[data-shader]');
+              openWork(event, {
+                slug: example.slug,
+                href: `/works/shaders/${example.slug}/`,
+                visual: <canvas
+                  width={preview?.width ?? 400}
+                  height={preview?.height ?? 300}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  ref={(canvas) => {
+                    if (canvas && preview) canvas.getContext('2d')?.drawImage(preview, 0, 0);
+                  }}
+                />,
+              });
+            }} className="group block rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#ff9f43]" aria-label={`打开 Shader：${example.title}`}>
+              <div data-project-thumbnail className="relative aspect-[4/3] overflow-hidden bg-[#0c0e13] transition-transform duration-300 group-hover:scale-[0.985]">
+                <canvas data-shader={example.slug} width={400} height={300} className="h-full w-full object-cover" role="img" aria-label={`${example.title}的实际 Shader 静止预览`} />
+                {failed.includes(example.slug) && <span className="absolute inset-0 grid place-content-center px-4 text-center text-sm text-stone-400">预览暂不可用<br /><span className="mt-2 text-xs">仍可打开实例与源码</span></span>}
+              </div>
+              <div className="mt-3 flex items-baseline justify-between gap-3">
+                <h3 className="text-sm font-normal text-stone-200 group-hover:text-white"><span className="mr-2 font-mono text-[10px] text-stone-500">S{String(index + 1).padStart(2, '0')}</span>{example.title}</h3>
+                <span className="font-mono text-[10px] text-stone-500">{example.category}</span>
+              </div>
+            </a>
+          </article>
+        ))}
+      </div>
+    </>
   );
 }
