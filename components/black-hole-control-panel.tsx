@@ -267,9 +267,6 @@ export function BlackHoleControlPanel({
                 </SelectContent>
               </Select>
             </div>
-            <p className="border-t border-white/8 pt-3 font-mono text-[10px] leading-5 text-stone-500">
-              拖动画面调整视角 · 滚轮缩放
-            </p>
           </TabsContent>
 
           <TabsContent value="physics" className="space-y-5">
@@ -376,11 +373,7 @@ export function BlackHoleControlPanel({
         </div>
       </Tabs>
 
-      <div className="flex items-center justify-between border-t border-white/10 px-4 py-3 font-mono text-[10px] uppercase tracking-wider text-stone-500">
-        <span className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.7)]" />
-          实时生效
-        </span>
+      <div className="flex items-center justify-end border-t border-white/10 px-4 py-3 font-mono text-[10px] uppercase tracking-wider text-stone-500">
         <span>G = c = M = 1</span>
       </div>
     </aside>

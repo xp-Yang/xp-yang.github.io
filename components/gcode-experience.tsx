@@ -240,19 +240,6 @@ export function GcodeExperience() {
       <div className={styles.workspace}>
         <section className={styles.stage} aria-label="走线预览">
           <div ref={host} className={styles.canvas} />
-          <div className={styles.titleBlock}>
-            <p className={styles.eyebrow}>
-              REALTIME PRINT GEOMETRY <span>01 / EXPERIMENT</span>
-            </p>
-            <h1>
-              一层一层，
-              <br />
-              看见成形。
-            </h1>
-            <p className={styles.subtitle}>
-              GCode 走线预览<span>从指令到有形的轨迹。</span>
-            </p>
-          </div>
           <div className={styles.stageTools}>
             <div
               className={styles.fpsBadge}
@@ -285,15 +272,9 @@ export function GcodeExperience() {
             <i>mm</i>
           </div>
           <div className={styles.modelBadge}>
-            <span className={styles.liveDot} />
-            <span>{model ? 'LIVE GEOMETRY' : 'PREPARING GEOMETRY'}</span>
             <b>{model ? model.segmentCount.toLocaleString() : '—'}</b>
             <span>SEGMENTS</span>
           </div>
-          <p className={styles.gestures}>
-            拖动旋转 <span>·</span> 右键平移 <span>·</span> 滚轮缩放{' '}
-            <span className={styles.touchHint}> / 双指缩放与平移</span>
-          </p>
           {graphicsError && (
             <div className={styles.graphicsError} role="alert">
               <Box size={28} />

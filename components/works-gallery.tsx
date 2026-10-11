@@ -11,7 +11,7 @@ export function WorksGallery({ items }: { items: ContentItem[] }) {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-x-5 gap-y-10 border-t border-white/15 pt-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {items.map((item, index) => (
           <article key={item.id}>
             <a
@@ -41,9 +41,9 @@ export function WorksGallery({ items }: { items: ContentItem[] }) {
                   <span className="mr-2 font-mono text-[10px] text-stone-600">
                     {String(index + 1).padStart(2, '0')}
                   </span>
-                  <h2 className="inline text-sm font-normal tracking-[-0.015em] text-stone-200 transition-colors group-hover:text-white">
+                  <h3 className="inline text-sm font-normal tracking-[-0.015em] text-stone-200 transition-colors group-hover:text-white">
                     {item.title}
-                  </h2>
+                  </h3>
                 </div>
                 <span className="hidden shrink-0 font-mono text-[9px] tracking-wide text-stone-600 2xl:inline">
                   {item.project?.tech.slice(0, 2).join(' · ')}
