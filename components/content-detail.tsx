@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink } from '@/components/ui';
 
 import { ProjectDemo } from '@/components/project-demo';
 import { RichContent } from '@/components/rich-content';
@@ -32,12 +32,12 @@ export function ContentDetail({ item }: { item: ContentItem }) {
   });
 
   return (
-    <main className="min-h-screen bg-[#050608] pb-24 pt-16">
+    <main className="min-h-screen bg-background pb-24 pt-16">
       <header className="border-b border-white/10 pb-14 pt-20 md:pb-20 md:pt-28">
         <div className="site-shell">
           <a
             href={archiveHref}
-            className="inline-flex items-center gap-2 text-sm text-stone-500 hover:text-white"
+            className="inline-flex items-center gap-2 text-sm text-text-subtle hover:text-white"
           >
             <ArrowLeft className="size-4" />
             返回{archiveLabel}
@@ -46,7 +46,7 @@ export function ContentDetail({ item }: { item: ContentItem }) {
             <div className="flex flex-wrap items-center gap-3">
               <p className="eyebrow">{category}</p>
               {item.placeholder && (
-                <span className="rounded-full border border-[#ff9f43]/30 px-2 py-0.5 font-mono text-[9px] uppercase text-[#ffb56f]">
+                <span className="rounded-full border border-accent/30 px-2 py-0.5 font-mono text-[9px] uppercase text-accent-label">
                   示例内容 · 待替换
                 </span>
               )}
@@ -56,10 +56,10 @@ export function ContentDetail({ item }: { item: ContentItem }) {
             >
               {item.title}
             </h1>
-            <p className="mt-7 max-w-2xl text-lg leading-8 text-stone-400">
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-text-muted">
               {item.summary}
             </p>
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 font-mono text-[10px] uppercase tracking-wider text-stone-600">
+            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 font-mono text-[10px] uppercase tracking-wider text-text-faint">
               <span>{formatContentDate(item.publishedAt)}</span>
               {item.type !== 'Project' && (
                 <span>{estimateReadingTime(item)} min read</span>
@@ -79,7 +79,7 @@ export function ContentDetail({ item }: { item: ContentItem }) {
             {item.project.tech.map((tech) => (
               <span
                 key={tech}
-                className="rounded-full border border-white/10 px-3 py-1.5 font-mono text-[10px] text-stone-500"
+                className="rounded-full border border-white/10 px-3 py-1.5 font-mono text-[10px] text-text-subtle"
               >
                 {tech}
               </span>
@@ -89,7 +89,7 @@ export function ContentDetail({ item }: { item: ContentItem }) {
                 href={item.project.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="ml-auto inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white"
+                className="ml-auto inline-flex items-center gap-2 text-sm text-text-muted hover:text-white"
               >
                 查看源码
                 <ExternalLink className="size-4" />
@@ -117,7 +117,7 @@ export function ContentDetail({ item }: { item: ContentItem }) {
                 <a
                   key={heading.id}
                   href={`#${heading.id}`}
-                  className="block py-2 text-sm text-stone-500 hover:text-white"
+                  className="block py-2 text-sm text-text-subtle hover:text-white"
                 >
                   {heading.title}
                 </a>

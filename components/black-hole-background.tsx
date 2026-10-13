@@ -1,10 +1,9 @@
 'use client';
+import { Pause, Play, Button } from '@/components/ui';
 
-import { Pause, Play } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
-import { Button } from '@/components/ui/button';
 import {
   DEFAULT_BLACK_HOLE_CONTROLS,
   type BlackHoleControls,
@@ -605,7 +604,7 @@ export function BlackHoleBackground({
     <>
       <div
         ref={mountRef}
-        className="pointer-events-none fixed inset-0 z-0 bg-[#020305]"
+        className="pointer-events-none fixed inset-0 z-0 bg-surface-canvas"
         data-webgl={webglAvailable ? 'available' : 'unavailable'}
       />
       <div className="pointer-events-none fixed inset-0 z-[1] bg-[linear-gradient(90deg,rgba(3,4,6,.91)_0%,rgba(3,4,6,.57)_42%,rgba(3,4,6,.08)_76%),linear-gradient(0deg,rgba(3,4,6,.93)_0%,transparent_44%)]" />
@@ -613,12 +612,12 @@ export function BlackHoleBackground({
       {(debugEnabled || controls.performanceInfo) && webglAvailable && (
         <output
           className={cn(
-            'fixed right-4 top-20 z-30 rounded-lg border border-white/12 bg-black/70 px-3 py-2 font-mono text-[10px] leading-5 text-stone-300 backdrop-blur-md',
+            'fixed right-4 top-20 z-30 rounded-lg border border-white/12 bg-black/70 px-3 py-2 font-mono text-[10px] leading-5 text-text-soft backdrop-blur-md',
             debugClassName,
           )}
           aria-live="polite"
         >
-          <span className="block text-[#ffad61]">
+          <span className="block text-accent-soft">
             SCHWARZSCHILD / RK4 × 224
           </span>
           <span className="block">
@@ -641,7 +640,7 @@ export function BlackHoleBackground({
           size="icon"
           onClick={toggleMotion}
           className={cn(
-            'fixed bottom-4 right-4 z-30 border-white/15 bg-black/55 text-stone-200 backdrop-blur-md hover:bg-white/10',
+            'fixed bottom-4 right-4 z-30 border-white/15 bg-black/55 text-text-body backdrop-blur-md hover:bg-white/10',
             playbackClassName,
           )}
         >

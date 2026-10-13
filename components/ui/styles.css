@@ -1,0 +1,10 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import './tokens.css';
+@import './foundations.css';
+@import './native-controls.css';
+@import './technical-theme.css';
+
+/* Independently built consumers must also generate this module's utilities. */
+@source '.';

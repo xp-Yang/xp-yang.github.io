@@ -5,6 +5,7 @@ import { ProjectExperience } from '@/components/project-experience';
 import { InkloopExperience } from '@/components/inkloop-experience';
 import { GcodeExperience } from '@/components/gcode-experience';
 import { PindouExperience } from '@/components/pindou-experience';
+import { GravityExperience } from '@/components/gravity-experience';
 import { createContentMetadata } from '@/lib/content-metadata';
 import { getContentByType, getContentItem } from '@/lib/content';
 
@@ -32,6 +33,7 @@ export default async function WorkDetailPage({
   if (slug === 'inkloop') return <InkloopExperience />;
   if (slug === 'gcode-preview') return <GcodeExperience />;
   if (slug === 'pindou') return <PindouExperience />;
+  if (slug === 'gravity-lab') return <GravityExperience />;
   const projects = getContentByType('Project');
   const index = projects.findIndex((project) => project.slug === slug);
   return (

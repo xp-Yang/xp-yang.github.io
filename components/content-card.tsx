@@ -1,4 +1,4 @@
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight } from '@/components/ui';
 
 import {
   contentHref,
@@ -28,36 +28,36 @@ export function ContentCard({
         className="grid gap-5 md:grid-cols-[4.5rem_1fr_auto] md:items-start"
         aria-label={`阅读：${item.title}`}
       >
-        <span className="font-mono text-xs text-[#ffad61]">
+        <span className="font-mono text-xs text-accent-soft">
           {String(index + 1).padStart(2, '0')}
         </span>
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="eyebrow">{category}</span>
             {item.placeholder && (
-              <span className="rounded-full border border-[#ff9f43]/30 px-2 py-0.5 font-mono text-[9px] uppercase text-[#ffb56f]">
+              <span className="rounded-full border border-accent/30 px-2 py-0.5 font-mono text-[9px] uppercase text-accent-label">
                 示例内容
               </span>
             )}
           </div>
-          <h2 className="mt-3 text-2xl font-medium tracking-[-0.03em] transition-colors group-hover:text-[#ffb067] md:text-3xl">
+          <h2 className="mt-3 text-2xl font-medium tracking-[-0.03em] transition-colors group-hover:text-accent-hover md:text-3xl">
             {item.title}
           </h2>
-          <p className="mt-3 max-w-2xl leading-7 text-stone-400">
+          <p className="mt-3 max-w-2xl leading-7 text-text-muted">
             {item.summary}
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             {item.tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-stone-500"
+                className="rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-text-subtle"
               >
                 {tag}
               </span>
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-5 text-xs text-stone-600 md:justify-end">
+        <div className="flex items-center gap-5 text-xs text-text-faint md:justify-end">
           <span>{formatContentDate(item.publishedAt)}</span>
           {item.type !== 'Project' && (
             <span>{estimateReadingTime(item)} min</span>

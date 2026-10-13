@@ -6,7 +6,10 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "predev": "npm run build:gravity",
     "dev": "vinext dev",
+    "prebuild": "npm run build:gravity",
+    "build:gravity": "tsx scripts/build-gravity-lab.ts",
     "build": "vinext build && tsx scripts/generate-static-rss.ts && tsx scripts/verify-static-assets.ts",
     "start": "tsx scripts/serve-static.ts",
     "content:sync": "tsx scripts/sync-notion.ts",

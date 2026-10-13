@@ -7,10 +7,10 @@ export function ContentArchive({ type }: { type: ContentType }) {
   const items = getContentByType(type);
   const label = contentLabels[type];
   return (
-    <main className="min-h-screen bg-[#050608]">
+    <main className="min-h-screen bg-background">
       <PageHeader {...label} count={items.length} />
       <section className="site-shell py-10 md:py-16">
-        {items.length > 0 ? items.map((item, index) => <ContentCard key={item.id} item={item} index={index} />) : <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-white/15 text-center text-stone-500">这里还没有已发布内容。</div>}
+        {items.length > 0 ? items.map((item, index) => <ContentCard key={item.id} item={item} index={index} />) : <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-white/15 text-center text-text-subtle">这里还没有已发布内容。</div>}
       </section>
     </main>
   );

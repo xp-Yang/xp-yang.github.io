@@ -1,0 +1,21 @@
+@layer utilities {
+  .font-literary {
+    font-family: var(--font-literary);
+  }
+  .site-signature {
+    font-family: var(--font-signature);
+    letter-spacing: 0.14em;
+  }
+  .glass-panel {
+    background: var(--glass-background);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(18px);
+  }
+  .eyebrow {
+    font-family: var(--font-code);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--eyebrow-foreground);
+  }
+}

@@ -107,5 +107,41 @@
         ]
       }
     ]
+  },
+  {
+    "id": "project-gravity-lab",
+    "slug": "gravity-lab",
+    "type": "Project",
+    "title": "万有引力多体模拟",
+    "summary": "在没有边界的三维空间里，观察等质量、等半径的小球如何在万有引力与碰撞中聚集、旋转与飞散，实时调整碰撞恢复系数。",
+    "publishedAt": "2026-10-12",
+    "tags": [
+      "Physics",
+      "WebGL",
+      "JavaScript"
+    ],
+    "cover": "/images/gravity-lab.svg",
+    "featured": true,
+    "order": 2,
+    "project": {
+      "demoUrl": "https://xp-yang.github.io/works/gravity-lab/",
+      "demoMode": "Link",
+      "tech": [
+        "Three.js",
+        "Barnes–Hut",
+        "Web Worker"
+      ]
+    },
+    "blocks": [
+      {
+        "id": "gravity-lab-intro",
+        "type": "paragraph",
+        "spans": [
+          {
+            "text": "自由空间中的引力与硬球碰撞实验。选择初始位置分布，调整小球数量、初始紧密度和初始运动；运行时可改变小球密度、碰撞恢复系数、时间倍速和计算精度，并拖动、缩放视角观察三维演化。"
+          }
+        ]
+      }
+    ]
   }
 ]

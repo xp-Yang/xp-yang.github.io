@@ -1,0 +1,217 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">万有引力多体模拟</title>
+  <desc id="desc">黑色自由空间中的暖白色等大小小球，一团密集球云与少量外围小球。</desc>
+  <defs>
+    <radialGradient id="background" cx="50%" cy="47%" r="70%">
+      <stop offset="0" stop-color="#0a0d12" />
+      <stop offset="1" stop-color="#07090c" />
+    </radialGradient>
+    <radialGradient id="surface" cx="31%" cy="25%" r="76%" fx="27%" fy="20%">
+      <stop offset="0" stop-color="#faf6e9" />
+      <stop offset="0.23" stop-color="#e9dfcc" />
+      <stop offset="0.56" stop-color="#c3bdaf" />
+      <stop offset="0.78" stop-color="#94999c" />
+      <stop offset="1" stop-color="#585f69" />
+    </radialGradient>
+    <radialGradient id="reflection">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.85" />
+      <stop offset="0.45" stop-color="#fff" stop-opacity="0.33" />
+      <stop offset="1" stop-color="#fff" stop-opacity="0" />
+    </radialGradient>
+    <symbol id="sphere" viewBox="-20 -20 40 40">
+      <circle r="18" fill="url(#surface)" />
+      <circle cx="-5.5" cy="-7.5" r="5.5" fill="url(#reflection)" />
+    </symbol>
+  </defs>
+  <path fill="url(#background)" d="M0 0h1200v900H0z" />
+  <g>
+    <use href="#sphere" x="597.46" y="391.05" width="40" height="40" />
+    <use href="#sphere" x="565.73" y="398.46" width="40" height="40" />
+    <use href="#sphere" x="613.53" y="390.01" width="40" height="40" />
+    <use href="#sphere" x="595.00" y="104.00" width="40" height="40" />
+    <use href="#sphere" x="711.04" y="435.09" width="40" height="40" />
+    <use href="#sphere" x="471.46" y="437.39" width="40" height="40" />
+    <use href="#sphere" x="598.61" y="591.03" width="40" height="40" />
+    <use href="#sphere" x="621.58" y="599.06" width="40" height="40" />
+    <use href="#sphere" x="945.00" y="665.00" width="40" height="40" />
+    <use href="#sphere" x="584.40" y="570.41" width="40" height="40" />
+    <use href="#sphere" x="603.23" y="533.27" width="40" height="40" />
+    <use href="#sphere" x="774.25" y="389.54" width="40" height="40" />
+    <use href="#sphere" x="289.00" y="560.00" width="40" height="40" />
+    <use href="#sphere" x="632.59" y="519.07" width="40" height="40" />
+    <use href="#sphere" x="453.52" y="455.38" width="40" height="40" />
+    <use href="#sphere" x="567.58" y="443.06" width="40" height="40" />
+    <use href="#sphere" x="411.97" y="558.84" width="40" height="40" />
+    <use href="#sphere" x="561.31" y="639.11" width="40" height="40" />
+    <use href="#sphere" x="577.41" y="425.67" width="40" height="40" />
+    <use href="#sphere" x="562.93" y="348.50" width="40" height="40" />
+    <use href="#sphere" x="519.14" y="443.66" width="40" height="40" />
+    <use href="#sphere" x="539.78" y="446.74" width="40" height="40" />
+    <use href="#sphere" x="517.96" y="463.78" width="40" height="40" />
+    <use href="#sphere" x="655.08" y="367.16" width="40" height="40" />
+    <use href="#sphere" x="578.94" y="425.36" width="40" height="40" />
+    <use href="#sphere" x="590.40" y="477.61" width="40" height="40" />
+    <use href="#sphere" x="207.00" y="232.00" width="40" height="40" />
+    <use href="#sphere" x="574.08" y="533.54" width="40" height="40" />
+    <use href="#sphere" x="595.47" y="306.71" width="40" height="40" />
+    <use href="#sphere" x="596.60" y="322.83" width="40" height="40" />
+    <use href="#sphere" x="518.45" y="343.05" width="40" height="40" />
+    <use href="#sphere" x="743.30" y="354.49" width="40" height="40" />
+    <use href="#sphere" x="744.93" y="455.34" width="40" height="40" />
+    <use href="#sphere" x="558.31" y="394.74" width="40" height="40" />
+    <use href="#sphere" x="778.14" y="493.32" width="40" height="40" />
+    <use href="#sphere" x="639.46" y="650.17" width="40" height="40" />
+    <use href="#sphere" x="595.71" y="464.01" width="40" height="40" />
+    <use href="#sphere" x="699.25" y="569.80" width="40" height="40" />
+    <use href="#sphere" x="382.71" y="358.84" width="40" height="40" />
+    <use href="#sphere" x="573.20" y="499.53" width="40" height="40" />
+    <use href="#sphere" x="743.62" y="506.71" width="40" height="40" />
+    <use href="#sphere" x="429.60" y="380.12" width="40" height="40" />
+    <use href="#sphere" x="450.23" y="500.41" width="40" height="40" />
+    <use href="#sphere" x="658.72" y="232.19" width="40" height="40" />
+    <use href="#sphere" x="728.00" y="143.00" width="40" height="40" />
+    <use href="#sphere" x="592.41" y="508.03" width="40" height="40" />
+    <use href="#sphere" x="569.22" y="309.70" width="40" height="40" />
+    <use href="#sphere" x="573.92" y="609.40" width="40" height="40" />
+    <use href="#sphere" x="728.95" y="455.74" width="40" height="40" />
+    <use href="#sphere" x="568.80" y="596.67" width="40" height="40" />
+    <use href="#sphere" x="642.33" y="425.50" width="40" height="40" />
+    <use href="#sphere" x="455.37" y="439.18" width="40" height="40" />
+    <use href="#sphere" x="509.31" y="418.33" width="40" height="40" />
+    <use href="#sphere" x="694.39" y="444.30" width="40" height="40" />
+    <use href="#sphere" x="661.49" y="246.20" width="40" height="40" />
+    <use href="#sphere" x="481.28" y="306.24" width="40" height="40" />
+    <use href="#sphere" x="570.14" y="312.57" width="40" height="40" />
+    <use href="#sphere" x="520.44" y="631.72" width="40" height="40" />
+    <use href="#sphere" x="551.00" y="753.00" width="40" height="40" />
+    <use href="#sphere" x="633.83" y="639.28" width="40" height="40" />
+    <use href="#sphere" x="437.33" y="257.37" width="40" height="40" />
+    <use href="#sphere" x="720.03" y="287.07" width="40" height="40" />
+    <use href="#sphere" x="559.44" y="237.52" width="40" height="40" />
+    <use href="#sphere" x="560.53" y="605.91" width="40" height="40" />
+    <use href="#sphere" x="508.85" y="367.36" width="40" height="40" />
+    <use href="#sphere" x="815.67" y="520.59" width="40" height="40" />
+    <use href="#sphere" x="538.28" y="573.26" width="40" height="40" />
+    <use href="#sphere" x="531.66" y="395.75" width="40" height="40" />
+    <use href="#sphere" x="634.84" y="405.52" width="40" height="40" />
+    <use href="#sphere" x="642.75" y="354.25" width="40" height="40" />
+    <use href="#sphere" x="941.00" y="388.00" width="40" height="40" />
+    <use href="#sphere" x="426.34" y="223.73" width="40" height="40" />
+    <use href="#sphere" x="763.00" y="395.05" width="40" height="40" />
+    <use href="#sphere" x="604.31" y="370.76" width="40" height="40" />
+    <use href="#sphere" x="397.96" y="413.00" width="40" height="40" />
+    <use href="#sphere" x="598.46" y="639.47" width="40" height="40" />
+    <use href="#sphere" x="488.42" y="312.56" width="40" height="40" />
+    <use href="#sphere" x="555.56" y="425.22" width="40" height="40" />
+    <use href="#sphere" x="766.49" y="459.67" width="40" height="40" />
+    <use href="#sphere" x="730.23" y="290.60" width="40" height="40" />
+    <use href="#sphere" x="520.74" y="473.59" width="40" height="40" />
+    <use href="#sphere" x="555.36" y="338.28" width="40" height="40" />
+    <use href="#sphere" x="699.03" y="512.64" width="40" height="40" />
+    <use href="#sphere" x="592.27" y="488.92" width="40" height="40" />
+    <use href="#sphere" x="430.60" y="501.25" width="40" height="40" />
+    <use href="#sphere" x="583.76" y="444.61" width="40" height="40" />
+    <use href="#sphere" x="650.69" y="360.86" width="40" height="40" />
+    <use href="#sphere" x="649.09" y="408.23" width="40" height="40" />
+    <use href="#sphere" x="814.66" y="545.34" width="40" height="40" />
+    <use href="#sphere" x="609.10" y="380.38" width="40" height="40" />
+    <use href="#sphere" x="462.81" y="469.43" width="40" height="40" />
+    <use href="#sphere" x="542.78" y="336.59" width="40" height="40" />
+    <use href="#sphere" x="479.28" y="396.94" width="40" height="40" />
+    <use href="#sphere" x="475.31" y="452.43" width="40" height="40" />
+    <use href="#sphere" x="380.15" y="324.90" width="40" height="40" />
+    <use href="#sphere" x="574.27" y="432.30" width="40" height="40" />
+    <use href="#sphere" x="544.17" y="308.05" width="40" height="40" />
+    <use href="#sphere" x="575.45" y="533.15" width="40" height="40" />
+    <use href="#sphere" x="379.62" y="301.99" width="40" height="40" />
+    <use href="#sphere" x="583.78" y="434.81" width="40" height="40" />
+    <use href="#sphere" x="616.99" y="385.98" width="40" height="40" />
+    <use href="#sphere" x="601.82" y="425.50" width="40" height="40" />
+    <use href="#sphere" x="603.87" y="218.43" width="40" height="40" />
+    <use href="#sphere" x="531.55" y="307.03" width="40" height="40" />
+    <use href="#sphere" x="683.42" y="509.86" width="40" height="40" />
+    <use href="#sphere" x="837.44" y="420.54" width="40" height="40" />
+    <use href="#sphere" x="776.21" y="325.42" width="40" height="40" />
+    <use href="#sphere" x="575.07" y="257.50" width="40" height="40" />
+    <use href="#sphere" x="601.64" y="192.58" width="40" height="40" />
+    <use href="#sphere" x="544.61" y="405.22" width="40" height="40" />
+    <use href="#sphere" x="525.33" y="353.77" width="40" height="40" />
+    <use href="#sphere" x="523.62" y="529.26" width="40" height="40" />
+    <use href="#sphere" x="775.84" y="288.57" width="40" height="40" />
+    <use href="#sphere" x="525.99" y="345.57" width="40" height="40" />
+    <use href="#sphere" x="666.87" y="441.91" width="40" height="40" />
+    <use href="#sphere" x="183.00" y="690.00" width="40" height="40" />
+    <use href="#sphere" x="537.90" y="413.90" width="40" height="40" />
+    <use href="#sphere" x="495.61" y="482.14" width="40" height="40" />
+    <use href="#sphere" x="427.39" y="518.15" width="40" height="40" />
+    <use href="#sphere" x="691.53" y="348.24" width="40" height="40" />
+    <use href="#sphere" x="400.74" y="517.41" width="40" height="40" />
+    <use href="#sphere" x="599.92" y="302.15" width="40" height="40" />
+    <use href="#sphere" x="588.65" y="631.64" width="40" height="40" />
+    <use href="#sphere" x="664.40" y="624.23" width="40" height="40" />
+    <use href="#sphere" x="584.77" y="313.88" width="40" height="40" />
+    <use href="#sphere" x="504.40" y="396.56" width="40" height="40" />
+    <use href="#sphere" x="564.81" y="677.26" width="40" height="40" />
+    <use href="#sphere" x="539.74" y="434.30" width="40" height="40" />
+    <use href="#sphere" x="705.22" y="486.67" width="40" height="40" />
+    <use href="#sphere" x="506.23" y="364.01" width="40" height="40" />
+    <use href="#sphere" x="829.63" y="407.41" width="40" height="40" />
+    <use href="#sphere" x="747.31" y="288.18" width="40" height="40" />
+    <use href="#sphere" x="626.59" y="396.84" width="40" height="40" />
+    <use href="#sphere" x="741.55" y="421.97" width="40" height="40" />
+    <use href="#sphere" x="576.89" y="280.09" width="40" height="40" />
+    <use href="#sphere" x="355.00" y="170.00" width="40" height="40" />
+    <use href="#sphere" x="764.17" y="414.57" width="40" height="40" />
+    <use href="#sphere" x="694.67" y="214.46" width="40" height="40" />
+    <use href="#sphere" x="753.80" y="573.35" width="40" height="40" />
+    <use href="#sphere" x="598.08" y="449.41" width="40" height="40" />
+    <use href="#sphere" x="606.10" y="404.73" width="40" height="40" />
+    <use href="#sphere" x="707.84" y="447.35" width="40" height="40" />
+    <use href="#sphere" x="646.81" y="394.22" width="40" height="40" />
+    <use href="#sphere" x="552.19" y="519.13" width="40" height="40" />
+    <use href="#sphere" x="546.59" y="417.93" width="40" height="40" />
+    <use href="#sphere" x="277.00" y="360.00" width="40" height="40" />
+    <use href="#sphere" x="871.00" y="551.00" width="40" height="40" />
+    <use href="#sphere" x="674.76" y="263.46" width="40" height="40" />
+    <use href="#sphere" x="704.32" y="332.10" width="40" height="40" />
+    <use href="#sphere" x="641.50" y="266.63" width="40" height="40" />
+    <use href="#sphere" x="626.92" y="373.19" width="40" height="40" />
+    <use href="#sphere" x="552.55" y="178.09" width="40" height="40" />
+    <use href="#sphere" x="442.78" y="509.43" width="40" height="40" />
+    <use href="#sphere" x="570.76" y="571.57" width="40" height="40" />
+    <use href="#sphere" x="614.84" y="616.94" width="40" height="40" />
+    <use href="#sphere" x="660.92" y="377.76" width="40" height="40" />
+    <use href="#sphere" x="418.00" y="682.00" width="40" height="40" />
+    <use href="#sphere" x="606.64" y="562.40" width="40" height="40" />
+    <use href="#sphere" x="437.69" y="572.38" width="40" height="40" />
+    <use href="#sphere" x="614.51" y="390.48" width="40" height="40" />
+    <use href="#sphere" x="444.19" y="422.61" width="40" height="40" />
+    <use href="#sphere" x="424.66" y="473.79" width="40" height="40" />
+    <use href="#sphere" x="756.00" y="695.00" width="40" height="40" />
+    <use href="#sphere" x="699.97" y="511.41" width="40" height="40" />
+    <use href="#sphere" x="508.93" y="487.44" width="40" height="40" />
+    <use href="#sphere" x="584.11" y="519.61" width="40" height="40" />
+    <use href="#sphere" x="756.27" y="343.29" width="40" height="40" />
+    <use href="#sphere" x="581.28" y="426.28" width="40" height="40" />
+    <use href="#sphere" x="770.69" y="397.57" width="40" height="40" />
+    <use href="#sphere" x="523.37" y="576.41" width="40" height="40" />
+    <use href="#sphere" x="518.60" y="269.88" width="40" height="40" />
+    <use href="#sphere" x="814.00" y="252.00" width="40" height="40" />
+    <use href="#sphere" x="484.70" y="484.01" width="40" height="40" />
+    <use href="#sphere" x="531.47" y="272.72" width="40" height="40" />
+    <use href="#sphere" x="616.59" y="494.87" width="40" height="40" />
+    <use href="#sphere" x="771.83" y="426.11" width="40" height="40" />
+    <use href="#sphere" x="707.46" y="531.31" width="40" height="40" />
+    <use href="#sphere" x="587.88" y="240.92" width="40" height="40" />
+    <use href="#sphere" x="564.65" y="494.01" width="40" height="40" />
+    <use href="#sphere" x="534.79" y="561.35" width="40" height="40" />
+    <use href="#sphere" x="449.79" y="450.89" width="40" height="40" />
+    <use href="#sphere" x="497.10" y="476.66" width="40" height="40" />
+    <use href="#sphere" x="602.36" y="571.36" width="40" height="40" />
+    <use href="#sphere" x="652.75" y="532.23" width="40" height="40" />
+    <use href="#sphere" x="706.58" y="442.78" width="40" height="40" />
+    <use href="#sphere" x="572.53" y="552.27" width="40" height="40" />
+    <use href="#sphere" x="487.41" y="457.25" width="40" height="40" />
+    <use href="#sphere" x="491.89" y="477.64" width="40" height="40" />
+  </g>
+</svg>

@@ -10,7 +10,7 @@ export function LegacyBlogRedirect({ slug }: { slug?: string }) {
   }, [target]);
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[#050608] px-6 text-stone-300">
+    <main className="grid min-h-screen place-items-center bg-background px-6 text-text-soft">
       <a
         className="underline underline-offset-4 hover:text-white"
         href={target}

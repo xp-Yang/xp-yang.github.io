@@ -27,25 +27,25 @@ export function WorksGallery({ items }: { items: ContentItem[] }) {
             >
               <div
                 data-project-thumbnail
-                className={`work-thumbnail work-thumbnail-${(index % 11) + 1} relative aspect-[4/3] overflow-hidden transition-[filter,transform] duration-300 ease-out group-hover:scale-[0.985] group-hover:brightness-110 group-focus-visible:ring-2 group-focus-visible:ring-[#ff9f43] group-focus-visible:ring-offset-4 group-focus-visible:ring-offset-[#050608]`}
+                className={`work-thumbnail work-thumbnail-${(index % 11) + 1} relative aspect-[4/3] overflow-hidden transition-[filter,transform] duration-300 ease-out group-hover:scale-[0.985] group-hover:brightness-110 group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-4 group-focus-visible:ring-offset-background`}
               >
                 {item.cover && <img src={item.cover} alt="" className="absolute inset-0 h-full w-full object-cover" style={item.slug === 'schwarzschild-event-horizon' ? { objectPosition: '50% 45%' } : undefined} />}
                 {item.placeholder && (
-                  <span className="absolute left-3 top-3 z-10 bg-black/55 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-stone-300 backdrop-blur-sm">
+                  <span className="absolute left-3 top-3 z-10 bg-black/55 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-text-soft backdrop-blur-sm">
                     占位
                   </span>
                 )}
               </div>
               <div className="mt-3 flex items-baseline justify-between gap-3">
                 <div className="min-w-0">
-                  <span className="mr-2 font-mono text-[10px] text-stone-600">
+                  <span className="mr-2 font-mono text-[10px] text-text-faint">
                     {String(index + 1).padStart(2, '0')}
                   </span>
-                  <h3 className="inline text-sm font-normal tracking-[-0.015em] text-stone-200 transition-colors group-hover:text-white">
+                  <h3 className="inline text-sm font-normal tracking-[-0.015em] text-text-body transition-colors group-hover:text-white">
                     {item.title}
                   </h3>
                 </div>
-                <span className="hidden shrink-0 font-mono text-[9px] tracking-wide text-stone-600 2xl:inline">
+                <span className="hidden shrink-0 font-mono text-[9px] tracking-wide text-text-faint 2xl:inline">
                   {item.project?.tech.slice(0, 2).join(' · ')}
                 </span>
               </div>

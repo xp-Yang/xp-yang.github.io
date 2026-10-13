@@ -138,7 +138,7 @@ export function ProjectExperience({
 
   return (
     <main
-      className="fixed inset-0 z-50 isolate origin-top-left overflow-hidden bg-[#050608] transition-[transform,border-radius,opacity] duration-[600ms] ease-[cubic-bezier(.22,.72,.15,1)]"
+      className="fixed inset-0 z-50 isolate origin-top-left overflow-hidden bg-background transition-[transform,border-radius,opacity] duration-[600ms] ease-[cubic-bezier(.22,.72,.15,1)]"
       style={{
         transform: closingTransform ?? 'translate3d(0,0,0) scale(1)',
         borderRadius: closing ? 12 : 0,

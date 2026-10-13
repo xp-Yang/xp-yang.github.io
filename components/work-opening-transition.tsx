@@ -1,4 +1,5 @@
 'use client';
+import { ActionButton } from '@/components/ui';
 
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -134,10 +135,10 @@ export function WorkTransitionProvider({ children }: { children: ReactNode }) {
       {children}
       {opening && (
         <div className="fixed inset-0 z-[60]" aria-busy={!opening.ready} style={{ pointerEvents: opening.fading ? 'none' : 'auto' }}>
-          <div aria-hidden="true" className="absolute inset-0 bg-[#050608] transition-opacity duration-[180ms]" style={{ opacity: opening.expanded && !opening.fading ? 1 : 0 }} />
+          <div aria-hidden="true" className="absolute inset-0 bg-background transition-opacity duration-[180ms]" style={{ opacity: opening.expanded && !opening.fading ? 1 : 0 }} />
           <div
             aria-hidden="true"
-            className={`absolute inset-0 overflow-hidden bg-[#050608] ${opening.className ?? ''}`}
+            className={`absolute inset-0 overflow-hidden bg-background ${opening.className ?? ''}`}
             style={{
               transformOrigin: '0 0', transform: transform ?? undefined,
               borderRadius: opening.expanded ? 0 : 12,
@@ -148,12 +149,12 @@ export function WorkTransitionProvider({ children }: { children: ReactNode }) {
             {opening.visual}
           </div>
           {opening.slow && !opening.fading && (
-            <div role="status" className="absolute inset-x-0 bottom-8 flex items-center justify-center gap-5 text-sm text-stone-200">
+            <div role="status" className="absolute inset-x-0 bottom-8 flex items-center justify-center gap-5 text-sm text-text-body">
               <span>正在加载作品…</span>
-              <button type="button" className="underline underline-offset-4" onClick={() => {
+              <ActionButton type="button" className="underline underline-offset-4" onClick={() => {
                 clear();
                 if (pathname !== '/works' && pathname !== '/works/') router.replace('/works/');
-              }}>返回作品</button>
+              }}>返回作品</ActionButton>
             </div>
           )}
         </div>

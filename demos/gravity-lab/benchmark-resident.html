@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gravity resident WebGPU performance timing</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+      body { margin: 0 auto; padding: 32px 24px; max-width: 1100px; background: #090b10; color: #edf0f5; }
+      h1 { margin-top: 0; font-size: 24px; }
+      p { color: #aab2c0; line-height: 1.6; }
+      button { padding: 10px 18px; border: 1px solid #4b5564; border-radius: 8px; background: #1b2536; color: inherit; font: inherit; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: default; }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+      #status { min-height: 24px; margin: 18px 0; }
+      pre { padding: 16px; border: 1px solid #303743; border-radius: 8px; background: #11151d; font: 12px/1.55 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body>
+    <h1>1000 球 · GPU 常驻模拟性能计时</h1>
+    <p>比较 CPU 直接求和、GPU 求力＋CPU 连续碰撞、GPU 常驻模拟，以及常驻模拟约 30 Hz 的完整快照。覆盖均匀球云、均匀球壳、对称球壳和最稀球壳。每个案例先用独立状态热身 0.1 秒，再计时新状态的前 1 秒模拟。</p>
+    <p>初始化、最终完整快照和误差诊断单独记录。推进计时包含每批标量读回；30 Hz 案例还包含按实际墙钟触发的完整快照。每个案例有 30 秒保护，点击后才开始，不运行自动测试。</p>
+    <div class="actions">
+      <button id="run" type="button">运行性能计时</button>
+      <button id="stop" type="button" disabled>停止并保留结果</button>
+      <button id="download" type="button" disabled>下载 JSON</button>
+    </div>
+    <p id="status" role="status">尚未运行。</p>
+    <pre id="results" aria-label="逐场景 JSON 计时记录"></pre>
+    <script type="module" src="./scripts/benchmark-resident-browser.js"></script>
+  </body>
+</html>

@@ -33,6 +33,25 @@ if (!references.size)
   throw new Error('Static export contains no client asset references.');
 references.add('/works/gcode-preview/index.html');
 references.add('/images/gcode-preview.png');
+references.add('/works/gravity-lab/index.html');
+references.add('/images/gravity-lab.svg');
+const gravityBase = '/experiments/gravity-lab/';
+references.add(gravityBase + 'asset-manifest.json');
+const gravityAssets = JSON.parse(
+  await readFile(join(root, gravityBase.slice(1), 'asset-manifest.json'), 'utf8'),
+) as { files: string[] };
+if (
+  !gravityAssets.files.includes('index.html') ||
+  !gravityAssets.files.some(file => /^assets\/simulation\.worker-[^/]+\.js$/.test(file))
+) {
+  throw new Error('Gravity Lab export is missing its entry page or simulation Worker.');
+}
+for (const file of gravityAssets.files) {
+  if (file.startsWith('/') || file.split('/').includes('..')) {
+    throw new Error('Gravity Lab asset inventory contains an invalid path.');
+  }
+  references.add(gravityBase + file);
+}
 const missing: string[] = [];
 for (const reference of references) {
   try {
@@ -44,5 +63,5 @@ for (const reference of references) {
 if (missing.length)
   throw new Error(`Static export is missing assets:\n${missing.join('\n')}`);
 console.log(
-  `Verified ${references.size} static entry assets, including the GCode page, cover and worker.`,
+  `Verified ${references.size} static entry assets, including the GCode and Gravity Lab pages, covers and workers.`,
 );

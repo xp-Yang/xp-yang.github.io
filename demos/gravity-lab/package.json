@@ -1,0 +1,20 @@
+{
+  "name": "gravity-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4180 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4180 --strictPort",
+    "test": "node --test tests/*.test.js",
+    "benchmark": "node scripts/benchmark.js",
+    "benchmark:1000": "node scripts/benchmark-1000.js"
+  },
+  "dependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "vite": "8.0.13"
+  }
+}

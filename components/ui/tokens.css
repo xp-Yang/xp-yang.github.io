@@ -1,0 +1,123 @@
+/* Shared site foundations. Business artwork palettes belong to their renderer. */
+@font-face {
+  font-family: 'Outfit Home';
+  src: url('/fonts/outfit-500.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-interface);
+  --font-mono: var(--font-code);
+  --font-heading: var(--font-interface);
+  --font-display: var(--font-signature);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-label: var(--accent-label);
+  --color-accent-content: var(--accent-content);
+  --color-link: var(--link);
+  --color-link-hover: var(--link-hover);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-panel: var(--surface-panel);
+  --color-surface-control: var(--surface-control);
+  --color-surface-demo: var(--surface-demo);
+  --color-surface-code: var(--surface-code);
+  --color-surface-canvas: var(--surface-canvas);
+  --color-surface-thumbnail: var(--surface-thumbnail);
+  --color-text-strong: var(--text-strong);
+  --color-text-body: var(--text-body);
+  --color-text-soft: var(--text-soft);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --color-text-faint: var(--text-faint);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root,
+.dark {
+  --background: #050608;
+  --foreground: #f4f1ea;
+  --card: #0b0d11;
+  --card-foreground: #f4f1ea;
+  --popover: #101319;
+  --popover-foreground: #f4f1ea;
+  --primary: #f4f1ea;
+  --primary-foreground: #08090b;
+  --secondary: #171a20;
+  --secondary-foreground: #ece8df;
+  --muted: #14171d;
+  --muted-foreground: #9299a6;
+  --accent: #ff9f43;
+  --accent-foreground: #130b04;
+  --destructive: #ef6a63;
+  --border: rgb(244 241 234 / 12%);
+  --input: rgb(244 241 234 / 14%);
+  --ring: #73b7ff;
+  --accent-soft: #ffad61;
+  --accent-hover: #ffb067;
+  --accent-label: #ffb56f;
+  --accent-content: #ffbd7d;
+  --link: #73b7ff;
+  --link-hover: #86c2ff;
+  --surface-overlay: #090b0f;
+  --surface-raised: #0c0e13;
+  --surface-panel: #07090d;
+  --surface-control: #0b0d12;
+  --surface-demo: #080a0e;
+  --surface-code: #030406;
+  --surface-canvas: #020305;
+  --surface-thumbnail: #111316;
+  --text-strong: #f5f5f4;
+  --text-body: #e7e5e4;
+  --text-soft: #d6d3d1;
+  --text-muted: #a8a29e;
+  --text-subtle: #78716c;
+  --text-faint: #57534e;
+  --selection-foreground: #160c03;
+  --selection-background: #ffae5c;
+  --scrollbar-thumb: #737983;
+  --scrollbar-thumb-hover: #a0a5ad;
+  --eyebrow-foreground: #a9b0bb;
+  --glass-background: linear-gradient(
+    145deg,
+    rgb(12 14 18 / 82%),
+    rgb(7 8 11 / 68%)
+  );
+  --glass-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 5%), 0 30px 80px rgb(0 0 0 / 22%);
+  --font-signature: 'Outfit Home', sans-serif;
+  --radius: 0.75rem;
+  --font-interface:
+    Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-literary: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  --font-code: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}

@@ -1,8 +1,7 @@
 'use client';
+import { Maximize, Pause, Play, Button } from '@/components/ui';
 
 import { useEffect, useRef, useState } from 'react';
-import { Maximize, Pause, Play } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { type ShaderExample, shaderSource, shaderSourceUrl } from '@/lib/shader-examples';
 import { createShaderRenderer } from '@/lib/shader-renderer';
 import { useWorkReady } from '@/components/work-opening-transition';
@@ -96,15 +95,15 @@ export function ShaderExperience({ example }: { example: ShaderExample }) {
   useEffect(() => { stageRef.current?.dispatchEvent(new Event('shader-playback')); }, [playing]);
 
   return (
-    <main className="fixed inset-0 z-50 overflow-hidden bg-[#050608] text-stone-200">
+    <main className="fixed inset-0 z-50 overflow-hidden bg-background text-text-body">
       <WorkExperienceHeader title={example.title} category={example.category} returnHref="/works/#shader-examples" sourceHref={shaderSourceUrl(example)} />
       <div ref={stageRef} className="absolute inset-0 bg-black">
         <canvas ref={canvasRef} className="block h-full w-full touch-pan-y" aria-label={`${example.title}实时 Shader`} aria-description={[example.summary, example.credit, example.license].filter(Boolean).join(' · ')} />
-        {error && <div role="status" className="absolute inset-0 grid place-items-center bg-[#050608] p-8 text-center text-sm text-stone-400">{error}</div>}
-        {notice && <p role="status" className="absolute bottom-20 left-4 right-4 rounded bg-black/80 px-4 py-2 text-sm text-stone-300 md:right-auto">{notice}</p>}
+        {error && <div role="status" className="absolute inset-0 grid place-items-center bg-background p-8 text-center text-sm text-text-muted">{error}</div>}
+        {notice && <p role="status" className="absolute bottom-20 left-4 right-4 rounded bg-black/80 px-4 py-2 text-sm text-text-soft md:right-auto">{notice}</p>}
         <div className="absolute bottom-4 right-4 flex gap-2">
-          {example.animated && <Button type="button" variant="outline" className="border-white/20 bg-black/70 text-stone-100" onClick={() => setPlaying(value => !value)} aria-label={playing ? '暂停动画' : '播放动画'}>{playing ? <Pause className="size-4" /> : <Play className="size-4" />}{playing ? '暂停' : '播放'}</Button>}
-          <Button type="button" variant="outline" className="border-white/20 bg-black/70 text-stone-100" onClick={async () => {
+          {example.animated && <Button type="button" variant="outline" className="border-white/20 bg-black/70 text-text-strong" onClick={() => setPlaying(value => !value)} aria-label={playing ? '暂停动画' : '播放动画'}>{playing ? <Pause className="size-4" /> : <Play className="size-4" />}{playing ? '暂停' : '播放'}</Button>}
+          <Button type="button" variant="outline" className="border-white/20 bg-black/70 text-text-strong" onClick={async () => {
             try { if (document.fullscreenElement) await document.exitFullscreen(); else await stageRef.current?.requestFullscreen(); }
             catch { setNotice('当前浏览器不支持全屏，请使用横屏或浏览器全屏模式。'); }
           }} aria-label="切换全屏"><Maximize className="size-4" />全屏</Button>

@@ -1,6 +1,8 @@
 'use client';
-
 import {
+  ActionButton,
+  NativeInput,
+  RangeInput,
   Box,
   ChevronDown,
   FileCode2,
@@ -9,7 +11,8 @@ import {
   RotateCcw,
   SlidersHorizontal,
   X,
-} from 'lucide-react';
+} from '@/components/ui';
+
 import {
   useCallback,
   useEffect,
@@ -220,6 +223,7 @@ export function GcodeExperience() {
     // The page-wide drop target supplements the accessible file-picker button.
     // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <main
+      data-ui-theme="technical"
       className={`${styles.experience} ${panelOpen ? styles.controlsExpanded : ''}`}
       onDragEnter={(event) => {
         event.preventDefault();
@@ -256,14 +260,14 @@ export function GcodeExperience() {
                   fps === 0 && <small>静止</small>
                 ))}
             </div>
-            <button
+            <ActionButton
               type="button"
               onClick={() => viewport.current?.reset()}
               aria-label="重置视角"
               title="重置视角"
             >
               <RotateCcw size={16} />
-            </button>
+            </ActionButton>
           </div>
           <div className={styles.axisBadge} aria-hidden="true">
             <span>X</span>
@@ -280,9 +284,9 @@ export function GcodeExperience() {
               <Box size={28} />
               <h2>三维视图暂不可用</h2>
               <p>{graphicsError}</p>
-              <button type="button" onClick={() => window.location.reload()}>
+              <ActionButton type="button" onClick={() => window.location.reload()}>
                 重新加载
-              </button>
+              </ActionButton>
             </div>
           )}
         </section>
@@ -291,7 +295,7 @@ export function GcodeExperience() {
           className={`${styles.panel} ${panelOpen ? styles.panelOpen : ''}`}
           aria-label="预览控制"
         >
-          <button
+          <ActionButton
             className={styles.mobileToggle}
             type="button"
             onClick={() => setPanelOpen((value) => !value)}
@@ -301,7 +305,7 @@ export function GcodeExperience() {
             <span>走线控制</span>
             <span>{model?.layers.length ?? '—'} 层</span>
             <ChevronDown size={16} />
-          </button>
+          </ActionButton>
           <div className={styles.panelScroll}>
             <div className={styles.panelHeading}>
               <span>GCODE 走线预览</span>
@@ -312,7 +316,7 @@ export function GcodeExperience() {
                 <span>01</span> 模型文件{' '}
                 <span className={styles.localLabel}>LOCAL ONLY</span>
               </div>
-              <button
+              <ActionButton
                 className={styles.importButton}
                 type="button"
                 onClick={() => fileInput.current?.click()}
@@ -322,8 +326,8 @@ export function GcodeExperience() {
                   打开 GCode 文件<small>或将文件拖入窗口 · 最大 100 MiB</small>
                 </span>
                 <span className={styles.plus}>+</span>
-              </button>
-              <input
+              </ActionButton>
+              <NativeInput
                 ref={fileInput}
                 type="file"
                 accept=".gcode,.gco,.g,text/plain"
@@ -338,9 +342,9 @@ export function GcodeExperience() {
               <div className={styles.fileName}>
                 <FileCode2 size={14} />
                 <span title={fileName}>{fileName || '尚未加载模型'}</span>
-                <button type="button" onClick={loadSample}>
+                <ActionButton type="button" onClick={loadSample}>
                   恢复示例
-                </button>
+                </ActionButton>
               </div>
               {loading && (
                 <div className={styles.loading} aria-live="polite">
@@ -348,10 +352,10 @@ export function GcodeExperience() {
                     <span>
                       {loading.stage} · {Math.round(loading.progress * 100)}%
                     </span>
-                    <button type="button" onClick={cancel}>
+                    <ActionButton type="button" onClick={cancel}>
                       取消
                       <X size={12} />
-                    </button>
+                    </ActionButton>
                   </div>
                   <progress
                     max={1}
@@ -364,13 +368,13 @@ export function GcodeExperience() {
               {error && (
                 <div className={styles.error} role="alert">
                   {error}
-                  <button
+                  <ActionButton
                     type="button"
                     aria-label="关闭错误提示"
                     onClick={() => setError('')}
                   >
                     <X size={13} />
-                  </button>
+                  </ActionButton>
                 </div>
               )}
               <p className={styles.privacy}>
@@ -393,9 +397,8 @@ export function GcodeExperience() {
               </div>
               <label className={styles.sliderLabel}>
                 起始层 <output>{model ? range.low + 1 : '—'}</output>
-                <input
+                <RangeInput
                   aria-label="起始层"
-                  type="range"
                   min={0}
                   max={Math.max(0, (model?.layers.length ?? 1) - 1)}
                   value={range.low}
@@ -418,9 +421,8 @@ export function GcodeExperience() {
               </label>
               <label className={styles.sliderLabel}>
                 结束层 <output>{model ? range.high + 1 : '—'}</output>
-                <input
+                <RangeInput
                   aria-label="结束层"
-                  type="range"
                   min={0}
                   max={Math.max(0, (model?.layers.length ?? 1) - 1)}
                   value={range.high}
@@ -441,10 +443,9 @@ export function GcodeExperience() {
                 <span>当前层走线</span>
                 <b>{percent}%</b>
               </div>
-              <input
+              <RangeInput
                 className={styles.moveSlider}
                 aria-label="当前层走线进度"
-                type="range"
                 min={topLayer ? topLayer.startMove - 1 : 0}
                 max={topLayer?.endMove ?? 1}
                 value={range.move}
@@ -454,7 +455,7 @@ export function GcodeExperience() {
                 }
               />
               <div className={styles.stepControls}>
-                <button
+                <ActionButton
                   type="button"
                   disabled={!topLayer || range.move < topLayer.startMove}
                   aria-label="上一步"
@@ -463,9 +464,9 @@ export function GcodeExperience() {
                   }
                 >
                   ← 上一步
-                </button>
+                </ActionButton>
                 <span>{percent === 100 ? '完整显示' : '前层已调暗'}</span>
-                <button
+                <ActionButton
                   type="button"
                   disabled={!topLayer || range.move >= topLayer.endMove}
                   aria-label="下一步"
@@ -474,14 +475,14 @@ export function GcodeExperience() {
                   }
                 >
                   下一步 →
-                </button>
+                </ActionButton>
               </div>
             </section>
 
             <section className={styles.legendSection}>
               <div className={styles.sectionLabel}>
                 <span>03</span> 走线类型{' '}
-                <button
+                <ActionButton
                   type="button"
                   disabled={!model}
                   onClick={() => {
@@ -494,7 +495,7 @@ export function GcodeExperience() {
                   {activeRoles.every((role) => range.visible[role.index])
                     ? '全部隐藏'
                     : '全部显示'}
-                </button>
+                </ActionButton>
               </div>
               <div className={styles.legend}>
                 {activeRoles.map((role) => (
@@ -510,7 +511,7 @@ export function GcodeExperience() {
                     <small>
                       {model!.roleCounts[role.index].toLocaleString()}
                     </small>
-                    <input
+                    <NativeInput
                       type="checkbox"
                       checked={range.visible[role.index]}
                       aria-label={`显示${role.label}`}

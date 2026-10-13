@@ -1,96 +1,30 @@
 'use client';
-
-import { RotateCcw, SlidersHorizontal, X } from 'lucide-react';
-import { useState } from 'react';
-
-import { Button } from '@/components/ui/button';
 import {
+  RotateCcw,
+  SlidersHorizontal,
+  MinusIcon,
+  Button,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+  NumericControl,
+  ToggleControl,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui';
+
+import { useState } from 'react';
+
 import {
   DEFAULT_BLACK_HOLE_CONTROLS,
   type BlackHoleCameraMode,
   type BlackHoleControls,
   type BlackHoleQuality,
 } from '@/lib/black-hole/controls';
-
-function NumericControl({
-  label,
-  displayValue,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-}: {
-  label: string;
-  displayValue: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="space-y-2.5">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-[13px] text-stone-300">{label}</span>
-        <output className="font-mono text-[11px] tabular-nums text-stone-100">
-          {displayValue}
-        </output>
-      </div>
-      <Slider
-        aria-label={label}
-        value={[value]}
-        min={min}
-        max={max}
-        step={step}
-        onValueChange={(next) =>
-          onChange((Array.isArray(next) ? next[0] : next) ?? value)
-        }
-        className="[&_[data-slot=slider-range]]:bg-[#ffad61] [&_[data-slot=slider-thumb]]:border-[#ffad61]/60"
-      />
-    </div>
-  );
-}
-
-function ToggleControl({
-  label,
-  description,
-  checked,
-  onCheckedChange,
-}: {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-5 py-1">
-      <div>
-        <p className="text-[13px] text-stone-200">{label}</p>
-        {description && (
-          <p className="mt-1 text-[11px] leading-4 text-stone-500">
-            {description}
-          </p>
-        )}
-      </div>
-      <Switch
-        aria-label={label}
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-        className="data-checked:bg-[#ffad61]"
-      />
-    </div>
-  );
-}
 
 function FixedRadii() {
   return (
@@ -100,11 +34,11 @@ function FixedRadii() {
         ['3M', '光子球'],
         ['6M', 'ISCO'],
       ].map(([value, label]) => (
-        <div key={label} className="bg-[#090b0f]/95 px-2 py-3 text-center">
-          <strong className="block font-mono text-[13px] font-normal text-[#ffad61]">
+        <div key={label} className="bg-surface-overlay/95 px-2 py-3 text-center">
+          <strong className="block font-mono text-[13px] font-normal text-accent-soft">
             {value}
           </strong>
-          <span className="mt-1 block text-[10px] text-stone-500">{label}</span>
+          <span className="mt-1 block text-[10px] text-text-subtle">{label}</span>
         </div>
       ))}
     </div>
@@ -129,11 +63,13 @@ export function BlackHoleControlPanel({
       <Button
         type="button"
         variant="outline"
+        size="icon"
+        aria-label="调整参数"
+        title="调整参数"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-50 h-11 border-white/15 bg-black/65 px-4 text-stone-100 backdrop-blur-xl hover:bg-white/10 md:bottom-auto md:top-20"
+        className="fixed bottom-4 right-4 z-50 size-11 border-white/15 bg-black/65 text-text-strong backdrop-blur-xl hover:bg-white/10 md:bottom-auto md:top-20"
       >
-        <SlidersHorizontal className="size-4 text-[#ffad61]" />
-        调整参数
+        <SlidersHorizontal className="size-4 text-accent-soft" />
       </Button>
     );
   }
@@ -141,13 +77,13 @@ export function BlackHoleControlPanel({
   return (
     <aside
       aria-label="黑洞观测参数"
-      className="fixed inset-x-3 bottom-3 z-50 flex max-h-[72svh] flex-col overflow-hidden rounded-2xl border border-white/12 bg-[#07090d]/88 text-stone-100 shadow-2xl shadow-black/60 backdrop-blur-2xl md:inset-x-auto md:bottom-auto md:right-5 md:top-20 md:max-h-[calc(100svh-6rem)] md:w-[22.5rem]"
+      className="fixed inset-x-3 bottom-3 z-50 flex max-h-[72svh] flex-col overflow-hidden rounded-2xl border border-white/12 bg-surface-panel/88 text-text-strong shadow-2xl shadow-black/60 backdrop-blur-2xl md:inset-x-auto md:bottom-auto md:right-5 md:top-20 md:max-h-[calc(100svh-6rem)] md:w-[22.5rem]"
       onPointerDown={(event) => event.stopPropagation()}
       onWheel={(event) => event.stopPropagation()}
     >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#ffad61]">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent-soft">
             Schwarzschild observer
           </p>
           <h2 className="mt-1 text-sm font-medium tracking-wide">观测参数</h2>
@@ -160,7 +96,7 @@ export function BlackHoleControlPanel({
             aria-label="恢复默认参数"
             title="恢复默认参数"
             onClick={() => onChange({ ...DEFAULT_BLACK_HOLE_CONTROLS })}
-            className="text-stone-400 hover:bg-white/10 hover:text-white"
+            className="text-text-muted hover:bg-white/10 hover:text-white"
           >
             <RotateCcw className="size-4" />
           </Button>
@@ -171,9 +107,9 @@ export function BlackHoleControlPanel({
             aria-label="收起参数面板"
             title="收起参数面板"
             onClick={() => setOpen(false)}
-            className="text-stone-400 hover:bg-white/10 hover:text-white"
+            className="text-text-muted hover:bg-white/10 hover:text-white"
           >
-            <X className="size-4" />
+            <MinusIcon className="size-4" />
           </Button>
         </div>
       </div>
@@ -242,14 +178,14 @@ export function BlackHoleControlPanel({
               onChange={(value) => update('zoom', value)}
             />
             <div className="space-y-2">
-              <p className="text-[13px] text-stone-300">相机模式</p>
+              <p className="text-[13px] text-text-soft">相机模式</p>
               <Select
                 value={controls.cameraMode}
                 onValueChange={(value) =>
                   value && update('cameraMode', value as BlackHoleCameraMode)
                 }
               >
-                <SelectTrigger className="h-10 w-full border-white/10 bg-white/[.035] text-stone-100">
+                <SelectTrigger className="h-10 w-full border-white/10 bg-white/[.035] text-text-strong">
                   <SelectValue>
                     {
                       {
@@ -260,7 +196,7 @@ export function BlackHoleControlPanel({
                     }
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent className="border-white/10 bg-[#0b0d12] text-stone-100">
+                <SelectContent className="border-white/10 bg-surface-control text-text-strong">
                   <SelectItem value="free">自由观察</SelectItem>
                   <SelectItem value="orbit">稳定圆轨道</SelectItem>
                   <SelectItem value="fixed">固定观测点</SelectItem>
@@ -310,14 +246,14 @@ export function BlackHoleControlPanel({
 
           <TabsContent value="imaging" className="space-y-5">
             <div className="space-y-2">
-              <p className="text-[13px] text-stone-300">渲染质量</p>
+              <p className="text-[13px] text-text-soft">渲染质量</p>
               <Select
                 value={controls.quality}
                 onValueChange={(value) =>
                   value && update('quality', value as BlackHoleQuality)
                 }
               >
-                <SelectTrigger className="h-10 w-full border-white/10 bg-white/[.035] text-stone-100">
+                <SelectTrigger className="h-10 w-full border-white/10 bg-white/[.035] text-text-strong">
                   <SelectValue>
                     {
                       {
@@ -329,7 +265,7 @@ export function BlackHoleControlPanel({
                     }
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent className="border-white/10 bg-[#0b0d12] text-stone-100">
+                <SelectContent className="border-white/10 bg-surface-control text-text-strong">
                   <SelectItem value="auto">自动</SelectItem>
                   <SelectItem value="high">高</SelectItem>
                   <SelectItem value="balanced">平衡</SelectItem>
@@ -366,14 +302,14 @@ export function BlackHoleControlPanel({
               checked={controls.performanceInfo}
               onCheckedChange={(value) => update('performanceInfo', value)}
             />
-            <p className="rounded-lg border border-white/8 bg-white/[.025] px-3 py-2.5 font-mono text-[10px] leading-5 text-stone-500">
+            <p className="rounded-lg border border-white/8 bg-white/[.025] px-3 py-2.5 font-mono text-[10px] leading-5 text-text-subtle">
               ACES tone mapping · Linear sRGB
             </p>
           </TabsContent>
         </div>
       </Tabs>
 
-      <div className="flex items-center justify-end border-t border-white/10 px-4 py-3 font-mono text-[10px] uppercase tracking-wider text-stone-500">
+      <div className="flex items-center justify-end border-t border-white/10 px-4 py-3 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
         <span>G = c = M = 1</span>
       </div>
     </aside>

@@ -1,0 +1,53 @@
+/* Native control skin; dimensions and placement belong to the caller. */
+.ui-action,
+.ui-native-input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ui-action:focus-visible,
+.ui-native-input:focus-visible {
+  outline: 2px solid var(--control-focus, var(--ring));
+  outline-offset: 4px;
+}
+
+.ui-action:disabled,
+.ui-native-input:disabled {
+  opacity: var(--control-disabled-opacity, 0.5);
+}
+
+.ui-range {
+  appearance: none;
+  background: transparent;
+  touch-action: pan-y;
+  accent-color: var(--range-thumb, var(--accent-soft));
+}
+
+.ui-range::-webkit-slider-runnable-track {
+  height: 3px;
+  background: var(--range-track, var(--muted));
+  border-radius: 3px;
+}
+
+.ui-range::-webkit-slider-thumb {
+  appearance: none;
+  height: 10px;
+  width: 10px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: var(--range-thumb, var(--accent-soft));
+  box-shadow: 0 0 0 3px var(--range-halo, transparent);
+}
+
+.ui-range::-moz-range-track {
+  height: 3px;
+  background: var(--range-track, var(--muted));
+  border-radius: 3px;
+}
+
+.ui-range::-moz-range-thumb {
+  height: 10px;
+  width: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--range-thumb, var(--accent-soft));
+}
