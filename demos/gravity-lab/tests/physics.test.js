@@ -1,10 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Simulation, computeForces } from '../src/physics/simulation.js';
-import { timeOfImpact, continuousDrift } from '../src/physics/collisions.js';
+import { Simulation, directForces } from '../src/physics/simulation.js';
+import { timeOfImpact, createContinuousDrift, continueContinuousDrift } from '../src/physics/collisions.js';
+import { FIXED_TIMESTEP } from '../src/physics/timestep.js';
+import { createBaseline, referenceDiagnostics } from '../src/diagnostics/reference.js';
 
 const near = (actual, expected, tolerance = 1e-10) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} differs from ${expected}`);
-const two = (config, p, v) => new Simulation({ count: 2, radius: .5, G: 0, theta: 0, ...config }).setState(p, v);
+const fixture = (config, positions, velocities) => Simulation.restore({
+  positions: Float64Array.from(positions), velocities: Float64Array.from(velocities),
+  acceptedSteps: 0, collisions: 0, collisionEnergyLoss: 0,
+}, { G: 0, collisionless: false, ...config });
+const baseline = simulation => createBaseline(simulation.snapshot(), simulation.config);
+const diagnostics = (simulation, initial) => referenceDiagnostics(simulation.snapshot(), simulation.config, initial);
+function completeDrift(positions, velocities, count, radius, duration) {
+  return continueContinuousDrift(createContinuousDrift(positions, velocities, count, radius, duration), Infinity);
+}
 function minDistance(s) {
   let minimum = Infinity;
   for (let i = 0; i < s.count; i++) for (let j = i + 1; j < s.count; j++) {
@@ -13,171 +23,137 @@ function minDistance(s) {
   return minimum;
 }
 
-test('all five three-dimensional distributions initialise without overlap and reproduce their seed', () => {
-  for (const distribution of ['uniform', 'gaussian', 'disk', 'shell', 'binary']) {
-    const a = new Simulation({ count: 160, distribution, packing: .06, seed: 77 });
-    const b = new Simulation({ count: 160, distribution, packing: .06, seed: 77 });
+test('all five supported distributions initialise without overlap and reproduce their seed', () => {
+  for (const distribution of ['uniform', 'shell', 'disk', 'symmetric-shell', 'ring']) {
+    const config = { count: 160, distribution, packing: .06, seed: 77, virial: .7, G: 1 };
+    const a = new Simulation(config), b = new Simulation(config);
     assert.deepEqual(a.positions, b.positions);
     assert.deepEqual(a.velocities, b.velocities);
     assert.ok(minDistance(a) >= 2 * a.radius);
-    const stats = a.stats(true);
+    const stats = diagnostics(a, baseline(a));
     near(2 * stats.kinetic / Math.abs(stats.potential), .7, 1e-12);
   }
 });
 
+test('reference G = 1 preserves the same nonzero initial velocities when actual gravity is zero', () => {
+  const config = { count: 32, virial: .7, seed: 77 };
+  const zero = new Simulation({ ...config, G: 0 }), one = new Simulation({ ...config, G: 1 });
+  assert.deepEqual(zero.positions, one.positions);
+  assert.deepEqual(zero.velocities, one.velocities);
+  assert.ok(zero.velocities.some(value => value !== 0));
+});
+
 test('head-on contact exchanges equal-mass velocities and preserves kinetic energy and momentum', () => {
-  const s = two({}, [-2, 0, 0, 2, 0, 0], [1, 0, 0, -1, 0, 0]);
-  s.advance(3, Infinity);
+  const s = fixture({}, [-2, 0, 0, 2, 0, 0], [1, 0, 0, -1, 0, 0]);
+  const initial = baseline(s);
+  s.advanceSteps(180, Infinity);
   near(s.velocities[0], -1); near(s.velocities[3], 1);
-  near(s.positions[0], -2); near(s.positions[3], 2);
+  near(s.positions[0], -1.5); near(s.positions[3], 1.5);
   assert.equal(s.collisions, 1);
-  near(s.stats(true).energyDrift, 0);
-  near(s.stats(true).momentumError, 0);
+  near(diagnostics(s, initial).energyDrift, 0);
+  near(diagnostics(s, initial).momentumError, 0);
 });
 
 test('oblique three-dimensional impact keeps tangential relative velocity and conserves motion', () => {
-  const s = two({}, [-2, -.25, -.15, 2, .25, .15], [1, .1, .2, -1, .1, .2]);
-  const initialEnergy = s.stats(true).kinetic;
-  s.advance(3, Infinity);
-  const stats = s.stats(true);
+  const s = fixture({}, [-2, -.1, -.05, 2, .1, .05], [1, .1, .2, -1, .1, .2]);
+  const initial = baseline(s), initialEnergy = diagnostics(s, initial).kinetic;
+  s.advanceSteps(180, Infinity);
+  const stats = diagnostics(s, initial);
   assert.equal(s.collisions, 1);
   near(stats.kinetic, initialEnergy, 1e-10);
   near(stats.momentumError, 0, 1e-12);
   near(s.velocities[1] + s.velocities[4], .2, 1e-12);
   near(s.velocities[2] + s.velocities[5], .4, 1e-12);
   assert.ok(Math.abs(s.velocities[1] - .1) > .1);
-  assert.ok(minDistance(s) >= 1 - 1e-10);
+  assert.ok(minDistance(s) >= .5 - 1e-10);
 });
 
 test('continuous detection handles crossing trajectories whose endpoints do not overlap', () => {
   near(timeOfImpact(10, 0, 0, -200, 0, 0, 1, .1), .045);
   const positions = new Float64Array([-5, 0, 0, 5, 0, 0]);
   const velocities = new Float64Array([100, 0, 0, -100, 0, 0]);
-  const collision = continuousDrift(positions, velocities, 2, .5, .1);
+  const collision = completeDrift(positions, velocities, 2, .5, .1);
   assert.equal(collision.events, 1);
   near(positions[0], -6); near(positions[3], 6);
-  const s = two({ maxDt: .1, travelFraction: .4 }, [-5, 0, 0, 5, 0, 0], [100, 0, 0, -100, 0, 0]);
-  s.advance(.1, Infinity);
+  const s = fixture({}, [-5, 0, 0, 5, 0, 0], [100, 0, 0, -100, 0, 0]);
+  s.advanceSteps(6, Infinity);
   assert.equal(s.collisions, 1);
   near(s.velocities[0], -100); near(s.velocities[3], 100);
-  near(s.positions[0], -6, 1e-9); near(s.positions[3], 6, 1e-9);
-});
-
-test('rotation slider allocates its stated fraction of the total kinetic energy', () => {
-  const s = new Simulation({ count: 160, rotation: .45, virial: .7 });
-  let rotation2 = 0, dot = 0;
-  for (let p = 0; p < s.positions.length; p += 3) {
-    rotation2 += s.positions[p] ** 2 + s.positions[p + 2] ** 2;
-    dot += s.velocities[p] * s.positions[p + 2] - s.velocities[p + 2] * s.positions[p];
-  }
-  const rotationEnergy = .5 * s.mass * dot * dot / rotation2;
-  near(rotationEnergy / s.stats(true).kinetic, .45, 1e-12);
+  near(s.positions[0], -5.5, 1e-9); near(s.positions[3], 5.5, 1e-9);
 });
 
 test('simultaneous touching contacts resolve deterministically without overlap or damping', () => {
-  const s = two({}, [-1, 0, 0, 0, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, -1, 0, 0]);
-  s.advance(.2, Infinity);
+  const s = fixture({}, [-.5, 0, 0, 0, 0, 0, .5, 0, 0], [1, 0, 0, 0, 0, 0, -1, 0, 0]);
+  const initial = baseline(s);
+  s.advanceSteps(12, Infinity);
   assert.ok(s.collisions >= 3);
   near(s.velocities[0], -1); near(s.velocities[3], 0); near(s.velocities[6], 1);
-  assert.ok(minDistance(s) >= 1 - 1e-12);
-  near(s.stats(true).energyDrift, 0, 1e-12);
+  assert.ok(minDistance(s) >= .5 - 1e-12);
+  near(diagnostics(s, initial).energyDrift, 0, 1e-12);
 });
 
 test('a free-space particle flies arbitrarily far without any wall or deletion', () => {
-  const s = two({}, [0, 0, 0, 0, 20, 0], [12, 3, 4, -2, 0, 0]);
-  s.advance(10, Infinity);
+  const s = fixture({}, [0, 0, 0, 0, 20, 0], [12, 3, 4, -2, 0, 0]);
+  s.advanceSteps(600, Infinity);
   near(s.positions[0], 120, 1e-8); near(s.positions[1], 30, 1e-8); near(s.positions[2], 40, 1e-8);
   assert.equal(s.count, 2); assert.equal(s.collisions, 0);
-});
-
-test('swept broad phase finds fast balls before their non-overlapping endpoints', () => {
-  const p = new Float64Array([-5, 0, 0, 5, 0, 0]);
-  const v = new Float64Array([100, 0, 0, -100, 0, 0]);
-  const result = continuousDrift(p, v, 2, .5, .1);
-  assert.equal(result.ok, true);
-  assert.equal(result.events, 1);
-  near(p[0], -6); near(p[3], 6);
-  near(v[0], -100); near(v[3], 100);
 });
 
 test('collision candidates are reconsidered after an impulse causes another impact', () => {
   const p = new Float64Array([-2, 0, 0, 0, 0, 0, 2, 0, 0]);
   const v = new Float64Array([3, 0, 0, 0, 0, 0, 0, 0, 0]);
-  const result = continuousDrift(p, v, 3, .5, 1);
+  const result = completeDrift(p, v, 3, .5, 1);
   assert.equal(result.ok, true);
   assert.equal(result.events, 2);
   near(v[0], 0); near(v[3], 0); near(v[6], 3);
   near(p[0], -1); near(p[3], 1); near(p[6], 3);
 });
 
-test('direct forces obey equal and opposite interactions; tighter tree opening reduces sample error', () => {
-  const s = new Simulation({ count: 768, seed: 17 });
-  const exact = computeForces(s.positions, s.count, 1, 0);
-  const loose = computeForces(s.positions, s.count, 1, .8);
-  const tight = computeForces(s.positions, s.count, 1, .25);
+test('direct forces obey equal and opposite interactions', () => {
+  const s = new Simulation({ count: 192, seed: 17 });
+  const exact = directForces(s.positions, s.count, 1, undefined, s.softeningLength);
   const sum = [0, 0, 0];
-  let looseError = 0, tightError = 0, reference = 0;
-  for (let p = 0; p < exact.length; p++) {
-    sum[p % 3] += exact[p];
-    looseError += (loose[p] - exact[p]) ** 2;
-    tightError += (tight[p] - exact[p]) ** 2;
-    reference += exact[p] ** 2;
-  }
+  for (let p = 0; p < exact.length; p++) sum[p % 3] += exact[p];
   assert.ok(Math.hypot(...sum) < 1e-10);
-  assert.ok(tightError < looseError);
-  assert.ok(Math.sqrt(tightError / reference) < .005);
-  s.configure({ theta: 0 });
-  assert.equal(s.stats(true).forceError, 0);
 });
 
-test('two-body circular orbit converges at second order when the time step halves', () => {
-  function orbit(dt) {
-    const s = two({ radius: .4, density: 5, G: 30, maxDt: dt }, [-3, 0, 0, 3, 0, 0], [0, 0, 0, 0, 0, 0]);
-    const speed = Math.sqrt(s.config.G * s.mass / 12), omega = speed / 3;
-    s.setState([-3, 0, 0, 3, 0, 0], [0, 0, -speed, 0, 0, speed]);
-    s.advance(Math.PI / (2 * omega), Infinity);
-    return { error: Math.hypot(s.positions[0], s.positions[1], s.positions[2] + 3), stats: s.stats(true) };
-  }
-  const coarse = orbit(.04), fine = orbit(.02);
-  assert.ok(coarse.error / fine.error > 3.4 && coarse.error / fine.error < 4.6);
-  assert.ok(Math.abs(fine.stats.energyDrift) < 1e-5);
-  assert.ok(fine.stats.momentumError < 1e-12);
+test('fixed-step two-body circular orbit stays near its analytic trajectory', () => {
+  const config = { G: 10 };
+  const initialState = fixture(config, [-3, 0, 0, 3, 0, 0], [0, 0, 0, 0, 0, 0]);
+  const speed = Math.sqrt(config.G * initialState.mass / 12), omega = speed / 3;
+  const s = fixture(config, [-3, 0, 0, 3, 0, 0], [0, 0, -speed, 0, 0, speed]);
+  const initial = baseline(s);
+  s.advanceSteps(600, Infinity);
+  const angle = omega * s.time;
+  assert.ok(Math.hypot(s.positions[0] + 3 * Math.cos(angle), s.positions[1], s.positions[2] + 3 * Math.sin(angle)) < 1e-5);
+  assert.ok(Math.abs(diagnostics(s, initial).energyDrift) < 1e-6);
+  assert.ok(diagnostics(s, initial).momentumError < 1e-12);
 });
 
-test('repeated gravity-driven elastic rebounds remain separate and do not lose kinetic energy to damping', () => {
-  const s = two({ radius: .3, G: 4, maxDt: .002 }, [-1.2, 0, 0, 1.2, 0, 0], [0, 0, 0, 0, 0, 0]);
+test('repeated gravity-driven elastic rebounds remain separate without artificial collision dissipation', () => {
+  const s = fixture({ G: 4 }, [-1.2, 0, 0, 1.2, 0, 0], [0, 0, 0, 0, 0, 0]);
+  const initial = baseline(s);
   let closest = Infinity;
-  for (let i = 0; i < 400; i++) { s.advance(.1, Infinity); closest = Math.min(closest, minDistance(s)); }
-  assert.ok(s.collisions >= 3);
-  assert.ok(closest >= .6 - 1e-9);
-  assert.ok(Math.abs(s.stats(true).energyDrift) < .003);
-  near(s.stats(true).momentumError, 0, 1e-12);
-});
-
-test('time budgets slow simulated time rather than enlarge steps or discard bodies', () => {
-  const s = new Simulation({ count: 128, maxDt: .01 });
-  const actual = s.advance(10, 0);
-  assert.ok(actual > 0 && actual <= .01);
-  assert.equal(s.acceptedSteps, 1); assert.equal(s.count, 128);
-});
-
-test('dense three-dimensional gravitational evolution preserves non-overlap through many impacts', () => {
-  const s = new Simulation({ count: 128, distribution: 'gaussian', packing: .06, virial: .15, rotation: .2, maxDt: .008 });
-  for (let k = 0; k < 200; k++) {
-    s.advance(.01, Infinity);
-    assert.ok(minDistance(s) >= 2 * s.radius - 1e-8);
+  for (let i = 0; i < 400; i++) {
+    s.advanceSteps(6, Infinity);
+    closest = Math.min(closest, minDistance(s));
     assert.equal(s.status, 'running');
   }
-  assert.ok(s.collisions > 20);
-  assert.ok(Math.abs(s.stats(true).energyDrift) < .005);
+  assert.ok(s.collisions >= 3);
+  assert.ok(closest >= .5 - 1e-9);
+  near(s.collisionEnergyLoss, 0);
+  near(diagnostics(s, initial).momentumError, 0, 1e-12);
 });
 
-test('changing common density changes every sphere mass and resets the energy reference', () => {
+test('zero compute budget does not advance or enlarge the fixed physical step', () => {
   const s = new Simulation({ count: 128 });
-  const previousMass = s.mass, positions = Float64Array.from(s.positions);
-  s.configure({ density: 2 });
-  near(s.mass, previousMass * 2);
+  const positions = s.positions.slice();
+  const waiting = s.advanceSteps(600, 0);
+  assert.equal(waiting.advancedSteps, 0);
+  assert.equal(s.time, 0);
   assert.deepEqual(s.positions, positions);
-  near(s.stats(true).energyDrift, 0);
-  assert.throws(() => s.setState([0, 0, 0, .1, 0, 0], [0, 0, 0, 0, 0, 0]), /overlap/);
+  const actual = s.advanceSteps(1, Infinity);
+  assert.equal(actual.advancedSteps, 1);
+  near(actual.advanced, FIXED_TIMESTEP);
+  assert.equal(s.acceptedSteps, 1); assert.equal(s.count, 128);
 });

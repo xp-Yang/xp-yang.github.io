@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gravity Lab · 架构性能计时</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; color: #e7e8ec; background: #101218; }
+      body { margin: 0 auto; padding: 24px; max-width: 1200px; }
+      h1 { font-size: 22px; margin-top: 0; }
+      p { max-width: 960px; color: #b6bac5; line-height: 1.6; }
+      .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 20px 0; }
+      label { display: flex; align-items: center; gap: 8px; }
+      button, select { background: #242936; border: 1px solid #485064; border-radius: 6px; color: inherit; padding: 8px 12px; font: inherit; }
+      button { cursor: pointer; }
+      button:disabled { opacity: .45; cursor: default; }
+      #start { background: #ab6424; border-color: #df934a; }
+      #status { display: block; min-height: 24px; margin-bottom: 12px; }
+      .viewport { overflow: auto; border: 1px solid #353b48; border-radius: 8px; }
+      #scene { width: 960px; height: 540px; background: #050610; }
+      #results { font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; background: #171b24; padding: 16px; border-radius: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Gravity Lab · 架构性能计时</h1>
+    <p>手动测量 1,000、5,000、20,000 粒子的 WebGPU 引力计算与直接渲染。全部使用均匀球壳、无碰撞、固定 1/60 秒步长；每组先暖机 24 步，再为每轮创建新引擎。默认每轮 120 步，三轮，每 8 步绘制一次，最多 2 批在途。</p>
+    <p>墙钟耗时包含指令编码、GPU 排队、计算与绘制，不包含初始化和最终回读。计时中不读取 GPU 缓冲。若支持时间戳，计算与绘制的 GPU 耗时另列；这些数据衡量推进吞吐量，不代表交互帧率，也不判定数值正确性。</p>
+    <div class="controls">
+      <label>每轮步数 <select id="steps"><option value="120">120</option><option value="60">60</option></select></label>
+      <label>轮数 <select id="runs"><option value="3">3</option><option value="1">1</option></select></label>
+      <button id="start" type="button">开始计时</button>
+      <button id="stop" type="button" disabled>停止</button>
+      <button id="download" type="button" disabled>下载 JSON</button>
+    </div>
+    <output id="status" aria-live="polite">等待手动启动。</output>
+    <div class="viewport"><div id="scene"></div></div>
+    <pre id="results">尚未运行。</pre>
+    <script type="module" src="./scripts/benchmark-architecture.js"></script>
+  </body>
+</html>

@@ -1,38 +1,40 @@
-import { computeForces, createForceWorkspace, potentialEnergy, sampleForceError } from './forces.js';
-import { continuousDrift, createCollisionWorkspace, resolveInitialOverlaps } from './collisions.js';
+import { directForces, potentialEnergy } from './forces.js';
+import { createCollisionWorkspace, createContinuousDrift, continueContinuousDrift } from './collisions.js';
+import { FIXED_TIMESTEP } from './timestep.js';
+import { MIN_PARTICLES, MAX_PARTICLES } from './limits.js';
+import { PARTICLE_RADIUS, PARTICLE_MASS } from './constants.js';
 
-export { computeForces, directForces, buildOctree } from './forces.js';
+export { directForces } from './forces.js';
+export { PARTICLE_RADIUS, PARTICLE_MASS } from './constants.js';
 
-const SPHERE_RADIUS = .25;
+// Initial motion uses a fixed energy reference, independent of actual gravity.
+const INITIAL_MOTION_REFERENCE_G = 1;
 
 export const DEFAULT_CONFIG = Object.freeze({
-  count: 384, radius: SPHERE_RADIUS, density: 1, packing: .025, virial: 0,
-  rotation: 0, distribution: 'uniform', seed: 42, G: 1, restitution: 1,
-  theta: .55, maxDt: .016, travelFraction: .2,
+  count: 384, packing: .025, virial: 0, distribution: 'symmetric-shell', seed: 42,
+  G: 1, restitution: 1, collisionless: true, softeningRatio: 1,
 });
-
 const now = () => globalThis.performance?.now() ?? Date.now();
 const clamp = (x, min, max) => Math.max(min, Math.min(max, Number(x)));
-const DISTRIBUTIONS = ['uniform', 'gaussian', 'disk', 'ring', 'shell', 'symmetric-shell', 'binary'];
+const DISTRIBUTIONS = ['uniform', 'shell', 'disk', 'symmetric-shell', 'ring'];
 const CLOUD_REFERENCE_RADIUS = .45;
 
-function cleanConfig(input) {
-  const c = { ...DEFAULT_CONFIG, ...input };
-  for (const key of Object.keys(DEFAULT_CONFIG)) if (typeof DEFAULT_CONFIG[key] === 'number' && !Number.isFinite(Number(c[key]))) throw new Error(`Invalid simulation parameter: ${key}`);
-  c.count = Math.round(clamp(c.count, 2, 1000));
-  c.radius = SPHERE_RADIUS;
-  delete c.collisions;
+/** Only the currently supported product parameters enter the physical model. */
+export function cleanConfig(input = {}) {
+  const c = {};
+  for (const [key, fallback] of Object.entries(DEFAULT_CONFIG)) c[key] = input[key] ?? fallback;
+  for (const [key, fallback] of Object.entries(DEFAULT_CONFIG)) {
+    if (typeof fallback === 'number' && !Number.isFinite(Number(c[key]))) throw new Error(`Invalid simulation parameter: ${key}`);
+  }
+  c.count = Math.round(clamp(c.count, MIN_PARTICLES, MAX_PARTICLES));
+  c.packing = clamp(c.packing, .005, .06);
+  c.virial = clamp(c.virial, 0, 2);
+  c.G = clamp(c.G, 0, 10);
   c.restitution = clamp(c.restitution, 0, 1);
-  c.density = clamp(c.density, .001, 100);
-  c.packing = clamp(c.packing, .001, .18);
-  c.virial = clamp(c.virial, 0, 5);
-  c.rotation = clamp(c.rotation, 0, 1);
-  c.G = clamp(c.G, 0, 100);
-  c.theta = clamp(c.theta, 0, 1.2);
-  c.maxDt = clamp(c.maxDt, .00001, .1);
-  c.travelFraction = clamp(c.travelFraction, .01, .4);
-  c.seed = Number(c.seed) >>> 0;
-  if (!DISTRIBUTIONS.includes(c.distribution)) c.distribution = 'uniform';
+  c.softeningRatio = clamp(c.softeningRatio, .1, 5);
+  c.collisionless = c.collisionless === true;
+  c.seed = Math.round(clamp(c.seed, 1, 999999));
+  if (!DISTRIBUTIONS.includes(c.distribution)) c.distribution = DEFAULT_CONFIG.distribution;
   return c;
 }
 
@@ -100,14 +102,16 @@ function symmetricShellPoints(count) {
   return { points, minimumChord };
 }
 
-function initialise(config) {
-  const { count, radius, packing, distribution, seed, rotation } = config;
+export function createInitialState(input = {}) {
+  const config = cleanConfig(input);
+  const { count, packing, distribution, seed } = config;
+  const radius = PARTICLE_RADIUS;
   const positions = new Float64Array(count * 3), velocities = new Float64Array(count * 3);
   const random = randomGenerator(seed), diameter = CLOUD_REFERENCE_RADIUS * 2;
   const minimumSeparation = 2 * radius * (1 + 1e-8);
   // The distribution's extent uses a fixed reference radius.
   let scale = CLOUD_REFERENCE_RADIUS * Math.cbrt(count / packing);
-  const mass = config.density * 4 * Math.PI * radius ** 3 / 3;
+  const mass = PARTICLE_MASS;
   const symmetricShell = distribution === 'symmetric-shell' ? symmetricShellPoints(count) : null;
   if (symmetricShell) {
     // Scaling preserves every ring's symmetry. Its analytic minimum chord
@@ -137,20 +141,10 @@ function initialise(config) {
       return [scale * Math.cos(angle), 0, scale * Math.sin(angle)];
     }
     if (distribution === 'shell') return spherePoint(scale);
-    if (distribution === 'gaussian') {
-      let p;
-      do { p = [gaussian() * scale * .46, gaussian() * scale * .46, gaussian() * scale * .46]; } while (Math.hypot(...p) > scale * 2);
-      return p;
-    }
     if (distribution === 'disk') {
       const r = scale * 1.4 * Math.sqrt(random()), angle = random() * Math.PI * 2;
       const thickness = Math.max(diameter * 3, scale * .12);
       return [r * Math.cos(angle), (random() - .5) * thickness, r * Math.sin(angle)];
-    }
-    if (distribution === 'binary') {
-      const p = spherePoint(scale * .72 * Math.cbrt(random()));
-      p[0] += i < count / 2 ? -scale * .9 : scale * .9;
-      return p;
     }
     return spherePoint(scale * Math.cbrt(random()));
   }
@@ -195,7 +189,7 @@ function initialise(config) {
       positions[p] -= sx / count; positions[p + 1] -= sy / count; positions[p + 2] -= sz / count;
     }
   }
-  if (config.virial === 0) return { positions, velocities, mass, scale };
+  if (config.virial === 0) return { config, positions, velocities, mass, radius, count, scale };
   for (let p = 0; p < positions.length; p += 3) {
     // Velocity distribution is independent of the selected position distribution.
     velocities[p] = gaussian(); velocities[p + 1] = gaussian(); velocities[p + 2] = gaussian();
@@ -203,9 +197,10 @@ function initialise(config) {
   let vx = 0, vy = 0, vz = 0;
   for (let p = 0; p < velocities.length; p += 3) { vx += velocities[p]; vy += velocities[p + 1]; vz += velocities[p + 2]; }
   for (let p = 0; p < velocities.length; p += 3) { velocities[p] -= vx / count; velocities[p + 1] -= vy / count; velocities[p + 2] -= vz / count; }
-  const potential = potentialEnergy(positions, count, config.G, mass);
-  // Orthogonalise thermal motion to the coherent rotation, then allocate the
-  // requested total kinetic energy: rotation is an actual energy fraction.
+  const referencePotential = potentialEnergy(positions, count, INITIAL_MOTION_REFERENCE_G, mass,
+    config.collisionless ? config.softeningRatio * radius : 0);
+  // Preserve the existing removal of coherent rotation around the Y axis,
+  // then assign the requested kinetic energy using reference G = 1.
   let rotation2 = 0, projection = 0;
   for (let p = 0; p < positions.length; p += 3) {
     const rx = positions[p + 2] - centerZ, rz = -(positions[p] - centerX);
@@ -218,292 +213,169 @@ function initialise(config) {
     velocities[p] -= coefficient * (positions[p + 2] - centerZ); velocities[p + 2] += coefficient * (positions[p] - centerX);
     thermal2 += velocities[p] ** 2 + velocities[p + 1] ** 2 + velocities[p + 2] ** 2;
   }
-  const totalV2 = config.virial * Math.abs(potential) / mass;
-  const thermalScale = thermal2 ? Math.sqrt((1 - rotation) * totalV2 / thermal2) : 0;
-  const rotationScale = rotation2 ? Math.sqrt(rotation * totalV2 / rotation2) : 0;
+  const totalV2 = config.virial * Math.abs(referencePotential) / mass;
+  const thermalScale = thermal2 ? Math.sqrt(totalV2 / thermal2) : 0;
   for (let p = 0; p < velocities.length; p += 3) {
-    velocities[p] = velocities[p] * thermalScale + (positions[p + 2] - centerZ) * rotationScale;
+    velocities[p] = velocities[p] * thermalScale;
     velocities[p + 1] *= thermalScale;
-    velocities[p + 2] = velocities[p + 2] * thermalScale - (positions[p] - centerX) * rotationScale;
+    velocities[p + 2] = velocities[p + 2] * thermalScale;
   }
-  return { positions, velocities, mass, scale };
+  return { config, positions, velocities, mass, radius, count, scale };
 }
 
+
+function requireFinite(values, label) {
+  for (const value of values) if (!Number.isFinite(value)) throw new Error(`${label}包含非有限数，已暂停。`);
+}
+
+export function stateBounds(positions, count, particleRadius = PARTICLE_RADIUS) {
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity], center = [0, 0, 0];
+  for (let p = 0; p < positions.length; p += 3) for (let k = 0; k < 3; k++) {
+    min[k] = Math.min(min[k], positions[p + k]); max[k] = Math.max(max[k], positions[p + k]);
+    center[k] += positions[p + k] / count;
+  }
+  let radius = particleRadius;
+  for (let p = 0; p < positions.length; p += 3) {
+    radius = Math.max(radius, Math.hypot(positions[p] - center[0], positions[p + 1] - center[1], positions[p + 2] - center[2]) + particleRadius);
+  }
+  return { min, max, center, radius };
+}
+
+/** CPU reference engine. Public arrays always describe a complete committed step. */
 export class Simulation {
-  constructor(config = {}) { this.reset(config); }
+  constructor(config = {}) { this.initialize(config); }
 
-  reset(config = {}) {
-    const nextConfig = cleanConfig({ ...this.config, ...config });
-    const initial = initialise(nextConfig);
-    this.config = nextConfig;
-    this.count = this.config.count;
-    this.radius = this.config.radius;
-    this.mass = initial.mass;
-    this.positions = initial.positions;
-    this.velocities = initial.velocities;
+  get softeningLength() { return this.config.collisionless ? this.config.softeningRatio * this.radius : 0; }
+
+  initialize(config = {}) {
+    const initial = createInitialState(config);
+    this.config = initial.config;
+    this.count = initial.count; this.radius = initial.radius; this.mass = initial.mass;
     this.initialScale = initial.scale;
+    this.positions = initial.positions; this.velocities = initial.velocities;
     this.accelerations = new Float64Array(this.count * 3);
-    this._backupPositions = new Float64Array(this.count * 3);
-    this._backupVelocities = new Float64Array(this.count * 3);
-    this._forceWorkspace ??= createForceWorkspace(this.count);
-    this._collisionWorkspace ??= createCollisionWorkspace(this.count);
-    this.time = 0; this.collisions = 0; this.acceptedSteps = 0;
-    this.stepMs = 0; this.status = 'ready'; this.detail = '';
-    this.ccdStatus = '等待初始接触处理'; this.retries = 0;
-    this._initialContactsPending = true;
-    this._normaliseInitialMotion = true;
-    this._baseline = null;
-    this._collisionEnergyLoss = 0;
-    this._diagnosticStamp = -Infinity;
-    this._lastForceEvaluator = null;
-    this.forcePrecision = 'f64';
+    this.acceptedSteps = 0; this.time = 0; this.collisions = 0; this.collisionEnergyLoss = 0;
+    this._allocateScratch();
     return this;
   }
 
-  configure(changes = {}) {
-    const runtime = {};
-    for (const key of ['G', 'density', 'restitution', 'theta', 'maxDt', 'travelFraction']) if (key in changes) runtime[key] = changes[key];
-    const previous = this.config;
-    this.config = cleanConfig({ ...this.config, ...runtime });
-    this.mass = this.config.density * 4 * Math.PI * this.radius ** 3 / 3;
-    if (this._initialContactsPending && this._normaliseInitialMotion && this.status !== 'stopped'
-      && previous.G !== this.config.G) {
-      // Preserve generated motion when gravity is enabled before the first
-      // advance; a G = 0 initialisation otherwise has no velocity directions.
-      this.velocities.set(initialise(this.config).velocities);
+  _allocateScratch() {
+    const size = this.count * 3;
+    this._spare = { positions: new Float64Array(size), velocities: new Float64Array(size), accelerations: new Float64Array(size) };
+    this._collisionWorkspace = this.config.collisionless ? null : createCollisionWorkspace(this.count);
+    this._trial = null; this._forceReady = false;
+    this.status = 'ready'; this.detail = ''; this.stepMs = 0;
+  }
+
+  /** Restore exactly the checkpoint velocities; this never regenerates or normalises. */
+  restoreCheckpoint(snapshot, config = snapshot.config) {
+    if (!snapshot?.positions || !snapshot?.velocities || snapshot.positions.length !== snapshot.velocities.length || snapshot.positions.length % 3) {
+      throw new Error('恢复快照的粒子位置和速度无效。');
     }
-    if (!this._initialContactsPending) {
-      if (previous.G !== this.config.G || previous.density !== this.config.density
-        || previous.theta !== this.config.theta) this._computeForces();
-      if (previous.G !== this.config.G || previous.density !== this.config.density) this._setBaseline();
+    const count = snapshot.positions.length / 3;
+    if (!Number.isInteger(count) || count < MIN_PARTICLES || count > MAX_PARTICLES) throw new Error('恢复快照的粒子数量无效。');
+    const positions = Float64Array.from(snapshot.positions), velocities = Float64Array.from(snapshot.velocities);
+    requireFinite(positions, '恢复位置'); requireFinite(velocities, '恢复速度');
+    const acceptedSteps = Number(snapshot.acceptedSteps ?? 0), collisions = Number(snapshot.collisions ?? 0);
+    const loss = Number(snapshot.collisionEnergyLoss ?? 0);
+    if (!Number.isSafeInteger(acceptedSteps) || acceptedSteps < 0 || !Number.isSafeInteger(collisions) || collisions < 0 || !Number.isFinite(loss) || loss < 0) {
+      throw new Error('恢复快照的累计计数无效。');
     }
-    this._diagnosticStamp = -Infinity;
-    if (this.status === 'stopped' && !this._initialContactsPending) { this.status = 'ready'; this.detail = ''; }
+    this.config = cleanConfig({ ...config, count });
+    this.count = count; this.radius = PARTICLE_RADIUS; this.mass = PARTICLE_MASS;
+    this.positions = positions; this.velocities = velocities; this.accelerations = new Float64Array(count * 3);
+    this.acceptedSteps = acceptedSteps; this.time = acceptedSteps * FIXED_TIMESTEP;
+    this.collisions = collisions; this.collisionEnergyLoss = loss;
+    this._allocateScratch();
     return this;
   }
 
-  /** Import API: finite positions; overlaps resolve before the first advance. */
-  setState(positions, velocities) {
-    if (positions.length !== velocities.length || positions.length % 3 || positions.length < 6) throw new Error('State must contain matching xyz positions and velocities for at least two spheres.');
-    const p = Float64Array.from(positions), v = Float64Array.from(velocities);
-    for (const x of [...p, ...v]) if (!Number.isFinite(x)) throw new Error('State contains a non-finite number.');
-    const count = p.length / 3;
-    this.positions = p; this.velocities = v; this.count = count;
-    this.config.count = count;
-    this.accelerations = new Float64Array(p.length);
-    this._backupPositions = new Float64Array(p.length); this._backupVelocities = new Float64Array(p.length);
-    this.time = 0; this.collisions = 0; this.acceptedSteps = 0; this.retries = 0;
-    this.stepMs = 0; this.status = 'ready'; this.detail = '';
-    this.ccdStatus = '等待初始接触处理';
-    this._initialContactsPending = true;
-    this._normaliseInitialMotion = false;
-    this._baseline = null;
-    this._collisionEnergyLoss = 0;
-    this._diagnosticStamp = -Infinity;
-    this._lastForceEvaluator = null;
-    this.forcePrecision = 'f64';
-    return this;
+  static restore(snapshot, config = snapshot.config) {
+    return Object.create(Simulation.prototype).restoreCheckpoint(snapshot, config);
   }
 
-  _prepareInitialContacts() {
-    const contact = resolveInitialOverlaps(this.positions, this.velocities, this.count, this.radius, { restitution: this.config.restitution });
-    this.collisions += contact.events;
-    if (!contact.ok) {
-      this.status = 'stopped';
-      this.detail = contact.reason;
-      this.ccdStatus = '初始接触处理暂停';
-      return false;
+  _beginStep() {
+    if (!this._forceReady) {
+      directForces(this.positions, this.count, this.config.G * this.mass, this.accelerations, this.softeningLength);
+      requireFinite(this.accelerations, '引力');
+      this._forceReady = true;
     }
-    // Removing penetration changes potential energy. Normalise generated
-    // initial motion before establishing the baseline; imported velocities
-    // receive only the contact impulses and are never rescaled.
-    if (this._normaliseInitialMotion) {
-      const kinetic = this._kineticAndMomentum().kinetic;
-      const potential = potentialEnergy(this.positions, this.count, this.config.G, this.mass);
-      const targetKinetic = this.config.virial * Math.abs(potential) * .5;
-      const factor = kinetic > 0 ? Math.sqrt(targetKinetic / kinetic) : 0;
-      for (let p = 0; p < this.velocities.length; p++) this.velocities[p] *= factor;
+    const state = this._spare;
+    state.positions.set(this.positions);
+    for (let p = 0; p < this.velocities.length; p++) state.velocities[p] = this.velocities[p] + this.accelerations[p] * (FIXED_TIMESTEP * .5);
+    requireFinite(state.velocities, '速度');
+    this._trial = { ...state, phase: 'drift', drift: null, events: 0, dissipation: 0 };
+    if (this.config.collisionless) {
+      for (let p = 0; p < state.positions.length; p++) state.positions[p] += state.velocities[p] * FIXED_TIMESTEP;
+      this._trial.phase = 'force';
+    } else {
+      this._trial.drift = createContinuousDrift(state.positions, state.velocities, this.count, this.radius, FIXED_TIMESTEP, {
+        restitution: this.config.restitution, workspace: this._collisionWorkspace,
+      });
     }
-    this._initialContactsPending = false;
-    this.ccdStatus = contact.separatedPairs ? '初始重叠已处理' : '连续碰撞检测';
-    return true;
   }
 
-  _computeForces() {
-    computeForces(this.positions, this.count, this.config.G * this.mass, this.config.theta, this.accelerations, this._forceWorkspace);
-    this._lastForceEvaluator = null;
-    this.forcePrecision = 'f64';
+  _commitStep() {
+    const trial = this._trial;
+    directForces(trial.positions, this.count, this.config.G * this.mass, trial.accelerations, this.softeningLength);
+    for (let p = 0; p < trial.velocities.length; p++) trial.velocities[p] += trial.accelerations[p] * (FIXED_TIMESTEP * .5);
+    requireFinite(trial.positions, '位置'); requireFinite(trial.velocities, '速度'); requireFinite(trial.accelerations, '引力');
+    const steps = this.acceptedSteps + 1, collisions = this.collisions + trial.events;
+    const loss = this.collisionEnergyLoss + this.mass * trial.dissipation;
+    if (!Number.isSafeInteger(steps) || !Number.isSafeInteger(collisions) || !Number.isFinite(loss)) throw new Error('累计数值超出分辨率，已暂停。');
+    this._spare = { positions: this.positions, velocities: this.velocities, accelerations: this.accelerations };
+    this.positions = trial.positions; this.velocities = trial.velocities; this.accelerations = trial.accelerations;
+    this.acceptedSteps = steps; this.time = steps * FIXED_TIMESTEP;
+    this.collisions = collisions; this.collisionEnergyLoss = loss;
+    this._trial = null;
   }
 
-  _kineticAndMomentum() {
-    let kinetic = 0, px = 0, py = 0, pz = 0, scale = 0;
-    for (let p = 0; p < this.velocities.length; p += 3) {
-      const x = this.velocities[p], y = this.velocities[p + 1], z = this.velocities[p + 2];
-      kinetic += .5 * this.mass * (x * x + y * y + z * z);
-      px += this.mass * x; py += this.mass * y; pz += this.mass * z;
-      scale += this.mass * Math.hypot(x, y, z);
-    }
-    return { kinetic, momentum: [px, py, pz], momentumScale: scale };
-  }
-
-  _setBaseline() {
-    this._collisionEnergyLoss = 0;
-    const motion = this._kineticAndMomentum();
-    const potential = potentialEnergy(this.positions, this.count, this.config.G, this.mass);
-    // Unsoftened point gravity has no finite potential at an exactly coincident
-    // centre. Keep that diagnostic unavailable instead of inventing an energy.
-    const energy = Number.isFinite(potential) ? motion.kinetic + potential : null;
-    this._baseline = { energy, scale: energy === null ? null : Math.max(motion.kinetic + Math.abs(potential), 1e-20), momentum: motion.momentum, momentumScale: Math.max(motion.momentumScale, this.mass, 1e-20) };
-    this._diagnosticStamp = -Infinity;
-    this._diagnostics = { kinetic: motion.kinetic, potential: Number.isFinite(potential) ? potential : null, energy, energyDrift: energy === null ? null : 0, momentumError: 0, forceError: 0 };
-  }
-
-  _safeStep() {
-    let vmax2 = 0, amax2 = 0;
-    for (let p = 0; p < this.positions.length; p += 3) {
-      const vx = this.velocities[p], vy = this.velocities[p + 1], vz = this.velocities[p + 2];
-      const ax = this.accelerations[p], ay = this.accelerations[p + 1], az = this.accelerations[p + 2];
-      vmax2 = Math.max(vmax2, vx * vx + vy * vy + vz * vz);
-      amax2 = Math.max(amax2, ax * ax + ay * ay + az * az);
-    }
-    // Preserve hypot's range for large but finite states imported through API.
-    let vmax = Math.sqrt(vmax2), amax = Math.sqrt(amax2);
-    if (!Number.isFinite(vmax2) || !Number.isFinite(amax2)) {
-      vmax = amax = 0;
-      for (let p = 0; p < this.positions.length; p += 3) {
-        vmax = Math.max(vmax, Math.hypot(this.velocities[p], this.velocities[p + 1], this.velocities[p + 2]));
-        amax = Math.max(amax, Math.hypot(this.accelerations[p], this.accelerations[p + 1], this.accelerations[p + 2]));
-      }
-    }
-    const travel = this.config.travelFraction * this.radius * 2;
-    return Math.min(this.config.maxDt, travel / Math.max(2 * vmax, 1e-20), Math.sqrt(travel / Math.max(2 * amax, 1e-20)));
-  }
-
-  advance(targetDuration, budgetMs = 12) {
-    const steps = this._advance(targetDuration, budgetMs, null);
-    let result = steps.next();
-    while (!result.done) {
-      try { this._computeForces(); }
-      catch (error) { steps.throw(error); throw error; }
-      result = steps.next();
-    }
-    return result.value;
-  }
-
-  /** Async force evaluation shares the same atomic KDK/CCD steps as CPU. */
-  async advanceAsync(targetDuration, budgetMs = 12, evaluateForces = null) {
-    if (!evaluateForces) return this.advance(targetDuration, budgetMs);
-    const steps = this._advance(targetDuration, budgetMs, evaluateForces);
-    let result = steps.next();
-    while (!result.done) {
-      try { await evaluateForces(this); }
-      catch (error) { steps.throw(error); throw error; }
-      result = steps.next();
-    }
-    return result.value;
-  }
-
-  *_advance(targetDuration, budgetMs, evaluateForces) {
-    if (!Number.isFinite(targetDuration) || targetDuration <= 0 || this.status === 'stopped') return 0;
-    const start = now(), before = this.time;
-    const preparing = this._initialContactsPending;
-    if (preparing && !this._prepareInitialContacts()) return 0;
-    if (preparing || this._lastForceEvaluator !== evaluateForces) {
-      try { yield; }
-      catch (error) {
-        if (preparing) this._initialContactsPending = true;
-        this.status = 'stopped'; this.ccdStatus = '求力暂停';
-        this.detail = error.message || String(error);
-        throw error;
-      }
-      this._lastForceEvaluator = evaluateForces;
-    }
-    if (preparing) this._setBaseline();
-    const gm = this.config.G * this.mass;
-    const contactScale = gm ? Math.sqrt((2 * this.radius) ** 3 / gm) : Infinity;
-    const contactDt = gm ? Math.min(this.config.maxDt / 32, contactScale * .00075) : Infinity;
-    let remaining = targetDuration;
-    this.status = 'running';
-    while (remaining > 1e-12 && (now() - start < budgetMs || this.time === before)) {
-      let dt = Math.min(remaining, this._safeStep());
-      if (!Number.isFinite(dt) || dt <= 0 || this.time + dt === this.time) {
-        this.status = 'stopped'; this.detail = '物理步长低于数值分辨率，已安全暂停。';
-        this.ccdStatus = '时间步无法推进'; break;
-      }
-      const stepStart = now();
-      this._backupPositions.set(this.positions); this._backupVelocities.set(this.velocities);
-      let success = false;
-      for (let retry = 0; retry < 12; retry++) {
-        if (retry) { this.positions.set(this._backupPositions); this.velocities.set(this._backupVelocities); }
-        for (let p = 0; p < this.velocities.length; p++) this.velocities[p] += this.accelerations[p] * dt * .5;
-        const drift = continuousDrift(this.positions, this.velocities, this.count, this.radius, dt, {
-          restitution: this.config.restitution, maxMs: 40, contactDt, workspace: this._collisionWorkspace,
-        });
-        if (drift.refine) {
-          this.retries++; this.ccdStatus = '碰撞前自适应细分';
-          // Aim at the predicted boundary rather than repeatedly taking 80%
-          // of the approach. The changed half-kick invalidates the old TOI, so
-          // the next trial still performs complete CCD before accepting it.
-          dt = Math.max(contactDt, Math.min(dt * .5, drift.firstImpactTime));
-          continue;
+  /** The pending CCD trial counts toward `steps`; soft budgets never shorten dt. */
+  advanceSteps(steps = 1, budgetMs = 8) {
+    if (!Number.isSafeInteger(steps) || steps < 0) throw new Error('推进步数必须是非负整数。');
+    if (!(budgetMs > 0)) return { advancedSteps: 0, advanced: 0, pending: Boolean(this._trial), ...this.metadata() };
+    const before = this.acceptedSteps, started = now(), deadline = started + budgetMs;
+    if (this.status === 'stopped') return { advancedSteps: 0, advanced: 0, pending: false, ...this.metadata() };
+    while (this.acceptedSteps - before < steps && now() < deadline) {
+      try {
+        this.status = 'running';
+        if (!this._trial) this._beginStep();
+        const trial = this._trial;
+        if (trial.phase === 'drift') {
+          const drift = continueContinuousDrift(trial.drift, deadline);
+          if (!drift.done) break;
+          if (!drift.ok) throw new Error(drift.reason || '接触求解失败，已回滚完整时间步。');
+          trial.events = drift.events; trial.dissipation = drift.dissipation; trial.phase = 'force';
         }
-        if (drift.ok) {
-          // Force splitting is less accurate at an impulsive contact than on a
-          // smooth orbit. Approach predicted contacts with shorter atomic steps;
-          // a rejected trial is rolled back, including all its collision events.
-          try {
-            yield;
-            this._lastForceEvaluator = evaluateForces;
-          } catch (error) {
-            // No time, impulse count or dissipation has been committed yet.
-            this.positions.set(this._backupPositions); this.velocities.set(this._backupVelocities);
-            this.status = 'stopped'; this.ccdStatus = '求力暂停';
-            this.detail = error.message || String(error);
-            throw error;
-          }
-          for (let p = 0; p < this.velocities.length; p++) this.velocities[p] += this.accelerations[p] * dt * .5;
-          this.collisions += drift.events;
-          this._collisionEnergyLoss += this.mass * drift.dissipation;
-          this.time += dt; this.acceptedSteps++;
-          this.ccdStatus = retry ? '连续碰撞 · 已细分时间步' : '连续碰撞检测';
-          success = true; break;
-        }
-        this.retries++; this.ccdStatus = drift.reason; dt *= .5;
-        if (dt < 1e-9) break;
+        // The pending complete drift can wait for the next wall-clock budget.
+        if (now() >= deadline) break;
+        this._commitStep();
+      } catch (error) {
+        // Only trial arrays were changed. p/v/a and all accounting stay atomic.
+        this._trial = null;
+        this.status = 'stopped'; this.detail = error.message || String(error);
+        break;
       }
-      if (!success) {
-        this.positions.set(this._backupPositions); this.velocities.set(this._backupVelocities);
-        this.status = 'stopped'; this.detail = '密集接触求解达到预算，已安全暂停；请降低紧密度或提高时间精度。';
-        this.ccdStatus = '接触求解暂停'; break;
-      }
-      const measured = now() - stepStart;
-      this.stepMs = this.stepMs ? this.stepMs * .8 + measured * .2 : measured;
-      remaining = Math.max(0, targetDuration - (this.time - before));
     }
-    return this.time - before;
+    const advancedSteps = this.acceptedSteps - before;
+    this.stepMs = now() - started;
+    return { advancedSteps, advanced: advancedSteps * FIXED_TIMESTEP, pending: Boolean(this._trial), computeMs: this.stepMs, ...this.metadata() };
   }
 
-  bounds() {
-    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity], center = [0, 0, 0];
-    for (let p = 0; p < this.positions.length; p += 3) for (let k = 0; k < 3; k++) {
-      min[k] = Math.min(min[k], this.positions[p + k]); max[k] = Math.max(max[k], this.positions[p + k]); center[k] += this.positions[p + k] / this.count;
-    }
-    let radius = this.radius;
-    for (let p = 0; p < this.positions.length; p += 3) radius = Math.max(radius, Math.hypot(this.positions[p] - center[0], this.positions[p + 1] - center[1], this.positions[p + 2] - center[2]) + this.radius);
-    return { min, max, center, radius };
+  metadata() {
+    return { count: this.count, radius: this.radius, mass: this.mass, acceptedSteps: this.acceptedSteps,
+      time: this.time, collisions: this.collisions, collisionEnergyLoss: this.collisionEnergyLoss,
+      status: this.status, detail: this.detail, stepMs: this.stepMs, precision: 'f64' };
   }
 
-  stats(forceRefresh = false) {
-    if (this._initialContactsPending || !this._baseline) {
-      this._diagnostics = { kinetic: this._kineticAndMomentum().kinetic, potential: null, energy: null, energyDrift: null, momentumError: null, forceError: null };
-    } else if (forceRefresh || now() - this._diagnosticStamp > 750) {
-      const motion = this._kineticAndMomentum();
-      const potential = potentialEnergy(this.positions, this.count, this.config.G, this.mass);
-      const energy = Number.isFinite(potential) ? motion.kinetic + potential : null;
-      const momentumError = Math.hypot(...motion.momentum.map((x, k) => x - this._baseline.momentum[k])) / this._baseline.momentumScale;
-      this._diagnostics = { kinetic: motion.kinetic, potential: Number.isFinite(potential) ? potential : null, energy, energyDrift: energy !== null && this._baseline.energy !== null ? (energy + this._collisionEnergyLoss - this._baseline.energy) / this._baseline.scale : null, momentumError, forceError: sampleForceError(this.positions, this.count, this.config.G * this.mass, this.config.theta, this.accelerations, 24, this.forcePrecision === 'f32') };
-      this._diagnosticStamp = now();
-    }
-    return { ...this._diagnostics, initialContactsPending: this._initialContactsPending, bounds: this.bounds(), stepMs: this.stepMs, acceptedSteps: this.acceptedSteps, collisions: this.collisions, time: this.time, count: this.count, mass: this.mass, radius: this.radius, status: this.status, detail: this.detail, ccdStatus: this.ccdStatus, retries: this.retries, diagnosticsTime: this._diagnosticStamp };
+  bounds() { return stateBounds(this.positions, this.count, this.radius); }
+
+  snapshot({ sampleCount = 24 } = {}) {
+    const samples = Math.min(this.count, Math.max(0, Math.floor(sampleCount)));
+    const sampleIndices = Uint32Array.from({ length: samples }, (_, i) => Math.floor(i * this.count / samples));
+    const accelerations = this._forceReady ? new Float64Array(samples * 3) : undefined;
+    if (accelerations) for (let i = 0; i < samples; i++) accelerations.set(this.accelerations.subarray(sampleIndices[i] * 3, sampleIndices[i] * 3 + 3), i * 3);
+    return { ...this.metadata(), config: { ...this.config }, positions: this.positions.slice(), velocities: this.velocities.slice(),
+      accelerations, sampleIndices, bounds: this.bounds() };
   }
 }

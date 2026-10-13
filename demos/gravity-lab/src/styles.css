@@ -1,7 +1,7 @@
 :root {
   font-family: var(--font-interface);
   color: #e4e2dc;
-  background: #090b0e;
+  background: #000;
   font-synthesis: none;
   --accent: #ff9f43;
   --control-track: #14171d;
@@ -34,7 +34,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .text-button:hover { color: #fff; }
 .text-button span { margin-left: 9px; }
 .workspace { --initial-panel-width: 360px; --corner-space: 82px; position: relative; height: calc(100svh - 64px); min-height: 580px; overflow: hidden; }
-.stage { position: relative; width: 100%; height: 100%; overflow: hidden; min-width: 0; background: #090b0e; }
+.stage { position: relative; width: 100%; height: 100%; overflow: hidden; min-width: 0; background: #000; }
 .viewport { position: absolute; inset: 0; }
 .viewport canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .stage-title { pointer-events: none; position: absolute; z-index: 2; left: 42px; top: 44px; max-width: calc(100% - 360px); }
@@ -96,12 +96,16 @@ h1 { margin: 0; font-weight: 400; font-size: clamp(26px, 2.45vw, 42px); letter-s
 .section-heading .section-no:last-child { margin-left: auto; }
 .pending-label { font-size: 9px; color: var(--accent); margin-left: auto; }
 .control, .select-control, .toggle-row { min-width: 0; }
+.particle-count-input[data-slot="input"] { width: 84px; height: 28px; padding: 3px 8px; border-color: #ffffff26; background: #ffffff06; text-align: right; font: 11px var(--gravity-mono); font-variant-numeric: tabular-nums; color: var(--text-strong); }
 .speed-note { margin: -12px 0 0; font-size: 11px; line-height: 16px; color: var(--text-subtle); }
 .speed-note > span:first-child { font-family: var(--font-code); color: var(--text-soft); }
+.timestep-readout { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--text-soft); }
+.timestep-readout[hidden] { display: none; }
+.timestep-readout output { font: 11px var(--font-code); color: var(--text-strong); }
 #budget-note { color: #ffad61; }
-.seed-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; line-height: 20px; color: var(--text-soft); }
+.seed-row { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 20px; color: var(--text-soft); }
 .seed-row > label { flex-shrink: 0; }
-.seed-button-control { flex-shrink: 0; }
+.seed-button-control { flex-shrink: 0; margin-left: auto; }
 .diagnostics { display: grid; gap: 14px; }
 .live-panel-body .diagnostics-section { padding: 0; }
 .diagnostics > div { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-soft); gap: 8px; }

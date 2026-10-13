@@ -1,0 +1,47 @@
+{
+  "backend": "CPU Float64 direct sum",
+  "count": 1000,
+  "collisionless": true,
+  "dt": 0.016666666666666666,
+  "requestedSteps": 120,
+  "node": "v26.3.0",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "measuredWork": "Fixed-step CPU KDK including first acceleration; no rendering, reference diagnostics or GPU work. Fresh deterministic initial state per run; no warm-up excluded.",
+  "medianActualMultiplier": 12.55844914154303,
+  "records": [
+    {
+      "run": 1,
+      "initializeMs": 8.6145,
+      "elapsedMs": 172.611875,
+      "acceptedSteps": 120,
+      "actualMultiplier": 11.586688343429442,
+      "msPerStep": 1.4384322916666668,
+      "collisions": 0,
+      "status": "running",
+      "detail": ""
+    },
+    {
+      "run": 2,
+      "initializeMs": 3.1510419999999897,
+      "elapsedMs": 159.22412500000002,
+      "acceptedSteps": 120,
+      "actualMultiplier": 12.560910603214179,
+      "msPerStep": 1.3268677083333336,
+      "collisions": 0,
+      "status": "running",
+      "detail": ""
+    },
+    {
+      "run": 3,
+      "initializeMs": 2.801499999999976,
+      "elapsedMs": 159.25533300000006,
+      "acceptedSteps": 120,
+      "actualMultiplier": 12.55844914154303,
+      "msPerStep": 1.3271277750000006,
+      "collisions": 0,
+      "status": "running",
+      "detail": ""
+    }
+  ]
+}

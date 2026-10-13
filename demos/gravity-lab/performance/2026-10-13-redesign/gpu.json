@@ -1,0 +1,1087 @@
+{
+  "tool": "gravity-lab-architecture-throughput",
+  "version": 1,
+  "startedAt": "2026-10-13T14:32:22.348Z",
+  "running": false,
+  "measurement": "wall time: JS encoding + queue backpressure + GPU compute + direct rendering; initialization and final capture excluded",
+  "numericalValidation": "not performed",
+  "parameters": {
+    "distribution": "shell",
+    "seed": 42,
+    "packing": 0.025,
+    "virial": 0,
+    "G": 1,
+    "collisionless": true,
+    "softeningRatio": 1,
+    "restitution": 1,
+    "counts": [
+      1000,
+      5000,
+      20000
+    ],
+    "radius": 0.25,
+    "density": 1,
+    "steps": 120,
+    "runs": 3,
+    "warmupSteps": 24,
+    "stepsPerDraw": 8,
+    "maxInFlight": 2,
+    "fixedStepSeconds": 0.016666666666666666,
+    "trails": false,
+    "quality": "low",
+    "canvasCssPixels": [
+      960,
+      540
+    ]
+  },
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+    "language": "zh-CN",
+    "hardwareConcurrency": 10,
+    "devicePixelRatio": 2,
+    "adapter": {
+      "vendor": "apple",
+      "architecture": "metal-3",
+      "device": "",
+      "description": "",
+      "isFallbackAdapter": false
+    },
+    "timestampQuery": true,
+    "limits": {
+      "maxComputeInvocationsPerWorkgroup": 256,
+      "maxComputeWorkgroupSizeX": 256,
+      "maxStorageBufferBindingSize": 134217728
+    }
+  },
+  "scenarios": [
+    {
+      "count": 1000,
+      "config": {
+        "distribution": "shell",
+        "seed": 42,
+        "packing": 0.025,
+        "virial": 0,
+        "G": 1,
+        "collisionless": true,
+        "softeningRatio": 1,
+        "restitution": 1,
+        "count": 1000
+      },
+      "runs": [
+        {
+          "run": 1,
+          "requestedSteps": 120,
+          "scheduledSteps": 120,
+          "acceptedSteps": 120,
+          "fixedStepSeconds": 0.016666666666666666,
+          "simulatedSeconds": 2,
+          "wallMs": 57.299999952316284,
+          "advanceMultiplier": 34.90401399065188,
+          "status": "running",
+          "outcome": "completed",
+          "detail": "",
+          "fault": 0,
+          "collisions": 0,
+          "collisionEnergyLoss": 0,
+          "submittedBatches": 15,
+          "drawCalls": 15,
+          "tileSize": 256,
+          "finalCaptureMs": 2.6999998092651367,
+          "gpu": {
+            "physicsMs": 55.64006399999999,
+            "renderMs": 1.8350080000000004,
+            "batches": [
+              {
+                "physicsMs": 3.997696,
+                "renderMs": 0.131072
+              },
+              {
+                "physicsMs": 5.373952,
+                "renderMs": 0.131072
+              },
+              {
+                "physicsMs": 5.177344,
+                "renderMs": 0.131072
+              },
+              {
+                "physicsMs": 4.58752,
+                "renderMs": 0.131072
+              },
+              {
+                "physicsMs": 5.636096,
+                "renderMs": 0.589824
+              },
+              {
+                "physicsMs": 3.997696,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 3.014656,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.818048,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 3.735552,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 3.014656,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.818048,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 3.014656,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.818048,
+                "renderMs": 0.131072
+              },
+              {
+                "physicsMs": 2.818048,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.818048,
+                "renderMs": 0.065536
+              }
+            ]
+          },
+          "timingError": null,
+          "visibilityAtStart": "visible",
+          "visibilityAtEnd": "visible",
+          "visibilityChanges": [],
+          "initializationMs": 4.200000047683716,
+          "compilationWarnings": [],
+          "canvas": {
+            "width": 960,
+            "height": 540,
+            "pixelRatio": 1
+          },
+          "gpuErrors": []
+        },
+        {
+          "run": 2,
+          "requestedSteps": 120,
+          "scheduledSteps": 120,
+          "acceptedSteps": 120,
+          "fixedStepSeconds": 0.016666666666666666,
+          "simulatedSeconds": 2,
+          "wallMs": 36.90000009536743,
+          "advanceMultiplier": 54.20054186533966,
+          "status": "running",
+          "outcome": "completed",
+          "detail": "",
+          "fault": 0,
+          "collisions": 0,
+          "collisionEnergyLoss": 0,
+          "submittedBatches": 15,
+          "drawCalls": 15,
+          "tileSize": 256,
+          "finalCaptureMs": 0.5,
+          "gpu": {
+            "physicsMs": 35.38944,
+            "renderMs": 1.2451840000000003,
+            "batches": [
+              {
+                "physicsMs": 2.228224,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.686976,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.818048,
+                "renderMs": 0.131072
+              },
+              {
+                "physicsMs": 2.94912,
+                "renderMs": 0.131072
+              },
+              {
+                "physicsMs": 2.359296,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 2.228224,
+                "renderMs": 0
+              },
+              {
+                "physicsMs": 2.228224,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.228224,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.228224,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.424832,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.228224,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.162688,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.359296,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.228224,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.031616,
+                "renderMs": 0.065536
+              }
+            ]
+          },
+          "timingError": null,
+          "visibilityAtStart": "visible",
+          "visibilityAtEnd": "visible",
+          "visibilityChanges": [],
+          "initializationMs": 3.5,
+          "compilationWarnings": [],
+          "canvas": {
+            "width": 960,
+            "height": 540,
+            "pixelRatio": 1
+          },
+          "gpuErrors": []
+        },
+        {
+          "run": 3,
+          "requestedSteps": 120,
+          "scheduledSteps": 120,
+          "acceptedSteps": 120,
+          "fixedStepSeconds": 0.016666666666666666,
+          "simulatedSeconds": 2,
+          "wallMs": 29.600000143051147,
+          "advanceMultiplier": 67.56756724102642,
+          "status": "running",
+          "outcome": "completed",
+          "detail": "",
+          "fault": 0,
+          "collisions": 0,
+          "collisionEnergyLoss": 0,
+          "submittedBatches": 15,
+          "drawCalls": 15,
+          "tileSize": 256,
+          "finalCaptureMs": 0.8999998569488525,
+          "gpu": {
+            "physicsMs": 28.704767999999998,
+            "renderMs": 1.31072,
+            "batches": [
+              {
+                "physicsMs": 1.900544,
+                "renderMs": 0
+              },
+              {
+                "physicsMs": 1.900544,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 1.900544,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 2.228224,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 1.900544,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 1.900544,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 1.96608,
+                "renderMs": 0.589824
+              },
+              {
+                "physicsMs": 1.96608,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 1.900544,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 1.96608,
+                "renderMs": 0
+              },
+              {
+                "physicsMs": 1.900544,
+                "renderMs": 0
+              },
+              {
+                "physicsMs": 2.031616,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 1.835008,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 1.703936,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 1.703936,
+                "renderMs": 0.065536
+              }
+            ]
+          },
+          "timingError": null,
+          "visibilityAtStart": "visible",
+          "visibilityAtEnd": "visible",
+          "visibilityChanges": [],
+          "initializationMs": 4.3999998569488525,
+          "compilationWarnings": [],
+          "canvas": {
+            "width": 960,
+            "height": 540,
+            "pixelRatio": 1
+          },
+          "gpuErrors": []
+        }
+      ],
+      "initialStateMs": 6.200000047683716,
+      "warmup": {
+        "requestedSteps": 24,
+        "scheduledSteps": 24,
+        "acceptedSteps": 24,
+        "fixedStepSeconds": 0.016666666666666666,
+        "simulatedSeconds": 0.4,
+        "wallMs": 17.200000047683716,
+        "advanceMultiplier": 23.255813889016068,
+        "status": "running",
+        "outcome": "completed",
+        "detail": "",
+        "fault": 0,
+        "collisions": 0,
+        "collisionEnergyLoss": 0,
+        "submittedBatches": 3,
+        "drawCalls": 3,
+        "tileSize": 256,
+        "finalCaptureMs": 0.5999999046325684,
+        "gpu": null,
+        "timingError": null,
+        "visibilityAtStart": "visible",
+        "visibilityAtEnd": "visible",
+        "visibilityChanges": [],
+        "initializationMs": 33.89999985694885,
+        "compilationWarnings": [],
+        "canvas": {
+          "width": 960,
+          "height": 540,
+          "pixelRatio": 1
+        }
+      }
+    },
+    {
+      "count": 5000,
+      "config": {
+        "distribution": "shell",
+        "seed": 42,
+        "packing": 0.025,
+        "virial": 0,
+        "G": 1,
+        "collisionless": true,
+        "softeningRatio": 1,
+        "restitution": 1,
+        "count": 5000
+      },
+      "runs": [
+        {
+          "run": 1,
+          "requestedSteps": 120,
+          "scheduledSteps": 120,
+          "acceptedSteps": 120,
+          "fixedStepSeconds": 0.016666666666666666,
+          "simulatedSeconds": 2,
+          "wallMs": 153.29999995231628,
+          "advanceMultiplier": 13.046314420235465,
+          "status": "running",
+          "outcome": "completed",
+          "detail": "",
+          "fault": 0,
+          "collisions": 0,
+          "collisionEnergyLoss": 0,
+          "submittedBatches": 15,
+          "drawCalls": 15,
+          "tileSize": 256,
+          "finalCaptureMs": 0.5,
+          "gpu": {
+            "physicsMs": 151.78137600000002,
+            "renderMs": 3.342336,
+            "batches": [
+              {
+                "physicsMs": 11.730944,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 11.14112,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 10.944512,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 10.551296,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 10.027008,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 11.14112,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.50272,
+                "renderMs": 0.065536
+              }
+            ]
+          },
+          "timingError": null,
+          "visibilityAtStart": "visible",
+          "visibilityAtEnd": "visible",
+          "visibilityChanges": [],
+          "initializationMs": 5.299999952316284,
+          "compilationWarnings": [],
+          "canvas": {
+            "width": 960,
+            "height": 540,
+            "pixelRatio": 1
+          },
+          "gpuErrors": []
+        },
+        {
+          "run": 2,
+          "requestedSteps": 120,
+          "scheduledSteps": 120,
+          "acceptedSteps": 120,
+          "fixedStepSeconds": 0.016666666666666666,
+          "simulatedSeconds": 2,
+          "wallMs": 145.79999995231628,
+          "advanceMultiplier": 13.717421129314799,
+          "status": "running",
+          "outcome": "completed",
+          "detail": "",
+          "fault": 0,
+          "collisions": 0,
+          "collisionEnergyLoss": 0,
+          "submittedBatches": 15,
+          "drawCalls": 15,
+          "tileSize": 256,
+          "finalCaptureMs": 0.7000000476837158,
+          "gpu": {
+            "physicsMs": 144.244736,
+            "renderMs": 3.1457280000000005,
+            "batches": [
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.699328,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.065536
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.699328,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.50272,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.699328,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.699328,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.131072
+              }
+            ]
+          },
+          "timingError": null,
+          "visibilityAtStart": "visible",
+          "visibilityAtEnd": "visible",
+          "visibilityChanges": [],
+          "initializationMs": 5.700000047683716,
+          "compilationWarnings": [],
+          "canvas": {
+            "width": 960,
+            "height": 540,
+            "pixelRatio": 1
+          },
+          "gpuErrors": []
+        },
+        {
+          "run": 3,
+          "requestedSteps": 120,
+          "scheduledSteps": 120,
+          "acceptedSteps": 120,
+          "fixedStepSeconds": 0.016666666666666666,
+          "simulatedSeconds": 2,
+          "wallMs": 146,
+          "advanceMultiplier": 13.698630136986301,
+          "status": "running",
+          "outcome": "completed",
+          "detail": "",
+          "fault": 0,
+          "collisions": 0,
+          "collisionEnergyLoss": 0,
+          "submittedBatches": 15,
+          "drawCalls": 15,
+          "tileSize": 256,
+          "finalCaptureMs": 0.6000001430511475,
+          "gpu": {
+            "physicsMs": 144.50688,
+            "renderMs": 3.473408,
+            "batches": [
+              {
+                "physicsMs": 9.699328,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.50272,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 10.15808,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.50272,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.50272,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.699328,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.568256,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 9.633792,
+                "renderMs": 0.065536
+              }
+            ]
+          },
+          "timingError": null,
+          "visibilityAtStart": "visible",
+          "visibilityAtEnd": "visible",
+          "visibilityChanges": [],
+          "initializationMs": 5.299999952316284,
+          "compilationWarnings": [],
+          "canvas": {
+            "width": 960,
+            "height": 540,
+            "pixelRatio": 1
+          },
+          "gpuErrors": []
+        }
+      ],
+      "initialStateMs": 19.399999856948853,
+      "warmup": {
+        "requestedSteps": 24,
+        "scheduledSteps": 24,
+        "acceptedSteps": 24,
+        "fixedStepSeconds": 0.016666666666666666,
+        "simulatedSeconds": 0.4,
+        "wallMs": 39.299999952316284,
+        "advanceMultiplier": 10.178117060695431,
+        "status": "running",
+        "outcome": "completed",
+        "detail": "",
+        "fault": 0,
+        "collisions": 0,
+        "collisionEnergyLoss": 0,
+        "submittedBatches": 3,
+        "drawCalls": 3,
+        "tileSize": 256,
+        "finalCaptureMs": 1.5,
+        "gpu": null,
+        "timingError": null,
+        "visibilityAtStart": "visible",
+        "visibilityAtEnd": "visible",
+        "visibilityChanges": [],
+        "initializationMs": 8.5,
+        "compilationWarnings": [],
+        "canvas": {
+          "width": 960,
+          "height": 540,
+          "pixelRatio": 1
+        }
+      }
+    },
+    {
+      "count": 20000,
+      "config": {
+        "distribution": "shell",
+        "seed": 42,
+        "packing": 0.025,
+        "virial": 0,
+        "G": 1,
+        "collisionless": true,
+        "softeningRatio": 1,
+        "restitution": 1,
+        "count": 20000
+      },
+      "runs": [
+        {
+          "run": 1,
+          "requestedSteps": 120,
+          "scheduledSteps": 120,
+          "acceptedSteps": 120,
+          "fixedStepSeconds": 0.016666666666666666,
+          "simulatedSeconds": 2,
+          "wallMs": 1766.3999998569489,
+          "advanceMultiplier": 1.1322463769032887,
+          "status": "running",
+          "outcome": "completed",
+          "detail": "",
+          "fault": 0,
+          "collisions": 0,
+          "collisionEnergyLoss": 0,
+          "submittedBatches": 15,
+          "drawCalls": 15,
+          "tileSize": 256,
+          "finalCaptureMs": 2.200000047683716,
+          "gpu": {
+            "physicsMs": 1742.405632,
+            "renderMs": 65.470464,
+            "batches": [
+              {
+                "physicsMs": 117.571584,
+                "renderMs": 10.682368
+              },
+              {
+                "physicsMs": 111.214592,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 110.231552,
+                "renderMs": 10.551296
+              },
+              {
+                "physicsMs": 110.166016,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 113.37728,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 119.144448,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 116.064256,
+                "renderMs": 10.551296
+              },
+              {
+                "physicsMs": 121.372672,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 115.867648,
+                "renderMs": 10.551296
+              },
+              {
+                "physicsMs": 119.013376,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 118.489088,
+                "renderMs": 10.616832
+              },
+              {
+                "physicsMs": 114.753536,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 120.324096,
+                "renderMs": 10.48576
+              },
+              {
+                "physicsMs": 117.374976,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 117.440512,
+                "renderMs": 0.196608
+              }
+            ]
+          },
+          "timingError": null,
+          "visibilityAtStart": "visible",
+          "visibilityAtEnd": "visible",
+          "visibilityChanges": [],
+          "initializationMs": 22.100000143051147,
+          "compilationWarnings": [],
+          "canvas": {
+            "width": 960,
+            "height": 540,
+            "pixelRatio": 1
+          },
+          "gpuErrors": []
+        },
+        {
+          "run": 2,
+          "requestedSteps": 120,
+          "scheduledSteps": 120,
+          "acceptedSteps": 120,
+          "fixedStepSeconds": 0.016666666666666666,
+          "simulatedSeconds": 2,
+          "wallMs": 1734.5,
+          "advanceMultiplier": 1.153070049005477,
+          "status": "running",
+          "outcome": "completed",
+          "detail": "",
+          "fault": 0,
+          "collisions": 0,
+          "collisionEnergyLoss": 0,
+          "submittedBatches": 15,
+          "drawCalls": 15,
+          "tileSize": 256,
+          "finalCaptureMs": 1.1000001430511475,
+          "gpu": {
+            "physicsMs": 1708.8512000000003,
+            "renderMs": 47.775743999999996,
+            "batches": [
+              {
+                "physicsMs": 117.30944,
+                "renderMs": 12.189696
+              },
+              {
+                "physicsMs": 112.328704,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 110.231552,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 110.624768,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 111.869952,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 111.673344,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 113.836032,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 118.095872,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 116.916224,
+                "renderMs": 10.551296
+              },
+              {
+                "physicsMs": 115.802112,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 117.768192,
+                "renderMs": 11.730944
+              },
+              {
+                "physicsMs": 115.539968,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 112.852992,
+                "renderMs": 10.878976
+              },
+              {
+                "physicsMs": 111.673344,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 112.328704,
+                "renderMs": 0.262144
+              }
+            ]
+          },
+          "timingError": null,
+          "visibilityAtStart": "visible",
+          "visibilityAtEnd": "visible",
+          "visibilityChanges": [],
+          "initializationMs": 20.09999990463257,
+          "compilationWarnings": [],
+          "canvas": {
+            "width": 960,
+            "height": 540,
+            "pixelRatio": 1
+          },
+          "gpuErrors": []
+        },
+        {
+          "run": 3,
+          "requestedSteps": 120,
+          "scheduledSteps": 120,
+          "acceptedSteps": 120,
+          "fixedStepSeconds": 0.016666666666666666,
+          "simulatedSeconds": 2,
+          "wallMs": 1683,
+          "advanceMultiplier": 1.1883541295306002,
+          "status": "running",
+          "outcome": "completed",
+          "detail": "",
+          "fault": 0,
+          "collisions": 0,
+          "collisionEnergyLoss": 0,
+          "submittedBatches": 15,
+          "drawCalls": 15,
+          "tileSize": 256,
+          "finalCaptureMs": 0.8999998569488525,
+          "gpu": {
+            "physicsMs": 1662.386176,
+            "renderMs": 3.342336,
+            "batches": [
+              {
+                "physicsMs": 110.75584,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 110.75584,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 111.280128,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 110.952448,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 112.656384,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 110.166016,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 111.804416,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 110.559232,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 110.231552,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 110.297088,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 110.493696,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 110.166016,
+                "renderMs": 0.196608
+              },
+              {
+                "physicsMs": 110.297088,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 110.231552,
+                "renderMs": 0.262144
+              },
+              {
+                "physicsMs": 111.73888,
+                "renderMs": 0.196608
+              }
+            ]
+          },
+          "timingError": null,
+          "visibilityAtStart": "visible",
+          "visibilityAtEnd": "visible",
+          "visibilityChanges": [],
+          "initializationMs": 21.299999952316284,
+          "compilationWarnings": [],
+          "canvas": {
+            "width": 960,
+            "height": 540,
+            "pixelRatio": 1
+          },
+          "gpuErrors": []
+        }
+      ],
+      "initialStateMs": 80.70000004768372,
+      "warmup": {
+        "requestedSteps": 24,
+        "scheduledSteps": 24,
+        "acceptedSteps": 24,
+        "fixedStepSeconds": 0.016666666666666666,
+        "simulatedSeconds": 0.4,
+        "wallMs": 344.5,
+        "advanceMultiplier": 1.1611030478955007,
+        "status": "running",
+        "outcome": "completed",
+        "detail": "",
+        "fault": 0,
+        "collisions": 0,
+        "collisionEnergyLoss": 0,
+        "submittedBatches": 3,
+        "drawCalls": 3,
+        "tileSize": 256,
+        "finalCaptureMs": 4,
+        "gpu": null,
+        "timingError": null,
+        "visibilityAtStart": "visible",
+        "visibilityAtEnd": "visible",
+        "visibilityChanges": [],
+        "initializationMs": 23.09999990463257,
+        "compilationWarnings": [],
+        "canvas": {
+          "width": 960,
+          "height": 540,
+          "pixelRatio": 1
+        }
+      }
+    }
+  ],
+  "errors": [],
+  "stoppedByUserOrDevice": false,
+  "finishedAt": "2026-10-13T14:32:28.870Z"
+}

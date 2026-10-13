@@ -34,7 +34,7 @@ if (!references.size)
 references.add('/works/gcode-preview/index.html');
 references.add('/images/gcode-preview.png');
 references.add('/works/gravity-lab/index.html');
-references.add('/images/gravity-lab.svg');
+references.add('/images/gravity-lab.png');
 const gravityBase = '/experiments/gravity-lab/';
 references.add(gravityBase + 'asset-manifest.json');
 const gravityAssets = JSON.parse(
@@ -42,9 +42,10 @@ const gravityAssets = JSON.parse(
 ) as { files: string[] };
 if (
   !gravityAssets.files.includes('index.html') ||
-  !gravityAssets.files.some(file => /^assets\/simulation\.worker-[^/]+\.js$/.test(file))
+  !gravityAssets.files.some(file => /^assets\/cpu\.worker-[^/]+\.js$/.test(file)) ||
+  !gravityAssets.files.some(file => /^assets\/reference\.worker-[^/]+\.js$/.test(file))
 ) {
-  throw new Error('Gravity Lab export is missing its entry page or simulation Worker.');
+  throw new Error('Gravity Lab export is missing its entry page, CPU Worker, or reference Worker.');
 }
 for (const file of gravityAssets.files) {
   if (file.startsWith('/') || file.split('/').includes('..')) {

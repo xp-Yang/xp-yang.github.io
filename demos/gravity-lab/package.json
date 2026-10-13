@@ -9,7 +9,7 @@
     "preview": "vite preview --host 127.0.0.1 --port 4180 --strictPort",
     "test": "node --test tests/*.test.js",
     "benchmark": "node scripts/benchmark.js",
-    "benchmark:1000": "node scripts/benchmark-1000.js"
+    "benchmark:1000": "node scripts/benchmark.js --count=1000"
   },
   "dependencies": {
     "three": "0.185.1"

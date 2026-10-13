@@ -6,7 +6,7 @@ import { WorkExperienceHeader } from '@/components/work-experience-header';
 export function GravityExperience() {
   const onLoad = useEmbeddedWorkReady('gravity-lab');
   return (
-    <main className="fixed inset-0 z-50 overflow-hidden bg-[#080b0d]">
+    <main className="fixed inset-0 z-50 overflow-hidden bg-black">
       <WorkExperienceHeader title="万有引力多体模拟" />
       <iframe
         onLoad={onLoad}
