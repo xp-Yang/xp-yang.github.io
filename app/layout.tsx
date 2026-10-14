@@ -27,6 +27,9 @@ export const metadata: Metadata = {
     description: siteConfig.description,
     images: ['/og.png'],
   },
+  icons: {
+    icon: { url: '/favicon.svg?v=y-1', type: 'image/svg+xml' },
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
