@@ -1,5 +1,33 @@
 [
   {
+    "id": "project-chain-game",
+    "slug": "chain-game",
+    "type": "Project",
+    "title": "连锁矿境",
+    "summary": "连起同色方块，收集长链宝石，仔细选择每一步的终点。两个关卡，在鼠标与指尖下规划一条撤离之路。",
+    "publishedAt": "2026-10-14",
+    "tags": ["Game", "Canvas", "TypeScript"],
+    "cover": "/images/chain-game.svg",
+    "featured": true,
+    "order": -2,
+    "project": {
+      "demoUrl": "https://xp-yang.github.io/games/chain-game/",
+      "demoMode": "Link",
+      "tech": ["TypeScript", "Canvas 2D", "PWA"]
+    },
+    "blocks": [
+      {
+        "id": "chain-game-intro",
+        "type": "paragraph",
+        "spans": [
+          {
+            "text": "回合制连线战斗原型。拖拽规划同色长链，经过宝石切换颜色，松手后确认行动；愤怒怪物会攻击危险终点。提供 6 行 × 5 列教学关、7 行 × 7 列标准关、本地存档与离线支持。生命损失跨关卡保留。"
+          }
+        ]
+      }
+    ]
+  },
+  {
     "id": "project-gcode-preview",
     "slug": "gcode-preview",
     "type": "Project",

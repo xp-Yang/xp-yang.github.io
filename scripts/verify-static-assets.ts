@@ -53,6 +53,38 @@ for (const file of gravityAssets.files) {
   }
   references.add(gravityBase + file);
 }
+const chainBase = '/games/chain-game/';
+references.add('/works/chain-game/index.html');
+references.add('/images/chain-game.svg');
+references.add(chainBase + 'asset-manifest.json');
+const chainAssets = JSON.parse(
+  await readFile(join(root, chainBase.slice(1), 'asset-manifest.json'), 'utf8'),
+) as { version: string; files: string[] };
+const requiredChainFiles = ['index.html', 'manifest.webmanifest', 'sw.js', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+if (
+  !/^[a-f0-9]{16}$/.test(chainAssets.version) ||
+  requiredChainFiles.some(file => !chainAssets.files.includes(file)) ||
+  !chainAssets.files.some(file => /^assets\/[^/]+\.js$/.test(file)) ||
+  !chainAssets.files.some(file => /^assets\/[^/]+\.css$/.test(file))
+) {
+  throw new Error('Chain Game export is missing its entry, UI assets, or offline support files.');
+}
+for (const file of chainAssets.files) {
+  if (file.startsWith('/') || file.split('/').includes('..')) {
+    throw new Error('Chain Game asset inventory contains an invalid path.');
+  }
+  references.add(chainBase + file);
+}
+const chainWorker = await readFile(join(root, chainBase.slice(1), 'sw.js'), 'utf8');
+if (/__CHAIN_CACHE_/.test(chainWorker)) {
+  throw new Error('Chain Game offline cache placeholders were not replaced during packaging.');
+}
+const chainManifest = JSON.parse(
+  await readFile(join(root, chainBase.slice(1), 'manifest.webmanifest'), 'utf8'),
+) as { scope: string; start_url: string };
+if (chainManifest.scope !== chainBase || chainManifest.start_url !== chainBase) {
+  throw new Error('Chain Game PWA must stay inside its own game scope.');
+}
 const missing: string[] = [];
 for (const reference of references) {
   try {
@@ -64,5 +96,5 @@ for (const reference of references) {
 if (missing.length)
   throw new Error(`Static export is missing assets:\n${missing.join('\n')}`);
 console.log(
-  `Verified ${references.size} static entry assets, including the GCode and Gravity Lab pages, covers and workers.`,
+  `Verified ${references.size} static entry assets, including GCode, Gravity Lab, and Chain Game with offline assets.`,
 );

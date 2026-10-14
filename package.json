@@ -6,10 +6,12 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "predev": "npm run build:gravity",
+    "predev": "npm run build:gravity && npm run build:chain-game",
     "dev": "vinext dev",
-    "prebuild": "npm run build:gravity",
+    "prebuild": "npm run build:gravity && npm run build:chain-game",
     "build:gravity": "tsx scripts/build-gravity-lab.ts",
+    "build:chain-game": "tsx scripts/build-chain-game.ts",
+    "dev:chain-game": "vite --config demos/chain-game/vite.config.ts demos/chain-game",
     "build": "vinext build && tsx scripts/generate-static-rss.ts && tsx scripts/verify-static-assets.ts",
     "start": "tsx scripts/serve-static.ts",
     "content:sync": "tsx scripts/sync-notion.ts",

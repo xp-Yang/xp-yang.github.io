@@ -1,0 +1,18 @@
+{
+  "id": "/games/chain-game/",
+  "name": "连锁矿境",
+  "short_name": "连锁矿境",
+  "description": "规划长链、收集宝石、选择安全落点的回合制连线游戏。",
+  "lang": "zh-CN",
+  "start_url": "/games/chain-game/",
+  "scope": "/games/chain-game/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#111922",
+  "theme_color": "#111922",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

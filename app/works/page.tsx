@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function WorksPage() {
   const items = getContentByType('Project');
-  const gameSlugs = new Set(['inkloop', 'pindou']);
+  const gameSlugs = new Set(['chain-game', 'inkloop', 'pindou']);
   const works = items.filter((item) => !gameSlugs.has(item.slug));
   const games = items.filter((item) => gameSlugs.has(item.slug));
 

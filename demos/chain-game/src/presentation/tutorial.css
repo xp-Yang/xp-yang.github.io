@@ -1,0 +1,209 @@
+.tutorial-card {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: end;
+  min-height: 0;
+  max-height: calc(100% - 160px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 12px 10px;
+  border: 1px solid #756846;
+  border-radius: 12px;
+  background: #252b23;
+  color: #edf0db;
+  box-shadow: 0 4px 0 #0b1214;
+  z-index: 1;
+}
+.tutorial-copy {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #756846 transparent;
+}
+.tutorial-step {
+  display: block;
+  color: #e5c681;
+  font-size: 9px;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.tutorial-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.45;
+  font-weight: 600;
+}
+.tutorial-body,
+.tutorial-detail {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.tutorial-detail {
+  margin-top: 8px;
+  color: #b0b99c;
+  font-size: 10px;
+}
+.tutorial-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 8px;
+}
+.tutorial-continue,
+.tutorial-skip {
+  min-height: 40px;
+  border-radius: 7px;
+  font-size: 11px;
+  padding: 6px 9px;
+}
+.tutorial-continue {
+  background: #e3cb8c;
+  border: 1px solid #e3cb8c;
+  color: #2d3224;
+  font-weight: 600;
+}
+.tutorial-continue:hover:not(:disabled) {
+  background: #f4dea8;
+}
+.tutorial-skip {
+  margin-left: auto;
+  padding-left: 0;
+  padding-right: 0;
+  color: #bbc4ae;
+  background: transparent;
+  border: 0;
+}
+.tutorial-skip:hover:not(:disabled) {
+  color: #f3e6bc;
+}
+.tutorial-card.is-busy .tutorial-detail {
+  color: #e5c681;
+}
+.play-area[data-tutorial-focus='execute'] .execute-button,
+.play-area[data-tutorial-focus='kills'] .kill-counter,
+.play-area[data-tutorial-focus='gems'] .gem-counter,
+.play-area[data-tutorial-focus='health'] .health-block {
+  outline: 2px solid #f3d38d;
+  outline-offset: 4px;
+  animation: tutorial-focus 1.6s ease-in-out infinite;
+}
+@keyframes tutorial-focus {
+  50% {
+    outline-color: #b39b69;
+  }
+}
+
+@media (max-width: 760px) and (orientation: portrait), (max-width: 599px) {
+  .play-area.has-tutorial {
+    --tutorial-arena-height: max(var(--arena-height), 700px);
+    grid-template-rows: 56px 24px 112px minmax(0, 1fr) 38px 64px 28px;
+    height: calc(
+      var(--tutorial-arena-height) - max(10px, env(safe-area-inset-top)) -
+        max(10px, env(safe-area-inset-bottom))
+    );
+  }
+  .has-tutorial .tutorial-card {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    align-self: stretch;
+    max-height: none;
+    height: 112px;
+    padding: 8px 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 66px;
+    gap: 8px;
+    border-radius: 9px;
+  }
+  .tutorial-step {
+    margin-bottom: 3px;
+    font-size: 8px;
+    letter-spacing: 0.5px;
+  }
+  .tutorial-title {
+    margin-bottom: 3px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .tutorial-body {
+    font-size: 10px;
+    line-height: 1.6;
+  }
+  .tutorial-detail {
+    margin-top: 3px;
+    font-size: 9px;
+    line-height: 1.5;
+  }
+  .tutorial-actions {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 0;
+  }
+  .tutorial-continue,
+  .tutorial-skip {
+    width: 100%;
+    min-height: 42px;
+    font-size: 10px;
+    padding: 5px 3px;
+  }
+  .has-tutorial .board-stage {
+    grid-row: 4;
+    width: min(
+      100%,
+      calc(
+        (var(--tutorial-arena-height) - max(10px, env(safe-area-inset-top)) -
+            max(10px, env(safe-area-inset-bottom)) - 346px) *
+          var(--board-ratio)
+      )
+    );
+  }
+  .has-tutorial .route-panel {
+    grid-row: 5;
+  }
+  .has-tutorial .health-block,
+  .has-tutorial .execute-button {
+    grid-row: 6;
+  }
+  .has-tutorial .game-messages {
+    grid-row: 7;
+  }
+}
+
+@media (min-width: 600px) and (max-height: 640px) and (orientation: landscape) {
+  .play-area.has-tutorial {
+    height: auto;
+    min-height: calc(var(--arena-height) + 120px);
+    grid-template-rows: 44px minmax(220px, 1fr) 76px 24px 112px;
+  }
+  .has-tutorial .tutorial-card {
+    grid-column: 1 / -1;
+    grid-row: 5;
+    align-self: stretch;
+    max-height: 112px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 140px;
+    padding: 10px 14px;
+    gap: 16px;
+  }
+  .tutorial-card .tutorial-step,
+  .tutorial-card .tutorial-title {
+    margin-bottom: 3px;
+  }
+  .tutorial-card .tutorial-detail {
+    margin-top: 3px;
+  }
+  .tutorial-card .tutorial-actions {
+    align-content: center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .play-area[data-tutorial-focus] .hud-plaque,
+  .play-area[data-tutorial-focus] .execute-button {
+    animation: none;
+  }
+}
