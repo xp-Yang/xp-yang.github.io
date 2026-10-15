@@ -116,37 +116,50 @@ function enrage(
 function spawnRewards(
   state: RunState,
   value: number,
-  killedPositions: Point[],
   actionTurn: number,
   events: GameEvent[],
-): void {
+): number {
   const pending = [...state.pendingDrops];
   state.pendingDrops = [];
   if (value > 0) pending.push({ value });
-  pending.forEach((drop, index) => {
-    const empty = emptyCells(state);
-    const isNewDrop = value > 0 && index === pending.length - 1;
-    const pos =
-      (isNewDrop
-        ? killedPositions.find((cell) =>
-            empty.some((candidate) => samePoint(cell, candidate)),
-          )
-        : undefined) ?? empty[0];
-    if (!pos) {
+  let spawnedValue = 0;
+  for (const drop of pending) {
+    const fruits = Object.values(state.entities)
+      .filter(
+        (entity): entity is Creep =>
+          entity.kind === 'creep' &&
+          !samePoint(entity.pos, state.player.pos),
+      )
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const empty = fruits.length === 0 ? emptyCells(state) : [];
+    const targetCount = fruits.length || empty.length;
+    if (targetCount === 0) {
       state.pendingDrops.push(drop);
       events.push({ type: 'reward-pending', value: drop.value });
-      return;
+      continue;
     }
+
+    const random = nextRandom(state.rng.rewards);
+    state.rng.rewards = random.state;
+    const targetIndex = Math.floor(random.value * targetCount);
+    const fruit = fruits[targetIndex];
     const gem: Gem = {
       id: `gem-${state.nextEntityId++}`,
       kind: 'gem',
-      pos,
+      pos: fruit?.pos ?? empty[targetIndex],
       value: drop.value,
       bornTurn: actionTurn,
     };
+    if (fruit) {
+      delete state.entities[fruit.id];
+      state.killCount += 1;
+      events.push({ type: 'creep-crushed', entity: fruit, gemId: gem.id });
+    }
     state.entities[gem.id] = gem;
     events.push({ type: 'gem-spawned', entity: gem });
-  });
+    spawnedValue += gem.value;
+  }
+  return spawnedValue;
 }
 
 export function resolveTurn(
@@ -163,12 +176,12 @@ export function resolveTurn(
   const state = cloneRun(original);
   const actionTurn = original.turn + 1;
   const events: GameEvent[] = [];
-  const killedPositions: Point[] = [];
   const preview: TurnPreview = {
     valid: true,
     kills: path.kills,
     collectedGems: path.collectedGems,
     rewardValue: 0,
+    rewardCount: 0,
     damage: 0,
     attackers: [],
     blocked: 0,
@@ -180,7 +193,6 @@ export function resolveTurn(
     if (id === 'exit') continue;
     const entity = state.entities[id];
     if (entity.kind === 'creep') {
-      killedPositions.push(entity.pos);
       events.push({ type: 'creep-killed', entity });
     } else events.push({ type: 'gem-collected', entity });
     delete state.entities[id];
@@ -259,7 +271,16 @@ export function resolveTurn(
         preview.rewardValue += effect.bonusValue;
     }
   }
-  spawnRewards(state, preview.rewardValue, killedPositions, actionTurn, events);
+  preview.rewardCount = spawnRewards(
+    state,
+    preview.rewardValue,
+    actionTurn,
+    events,
+  );
+  if (!state.exitUnlocked && state.killCount >= getLevel(state.levelId).goal) {
+    state.exitUnlocked = true;
+    events.push({ type: 'exit-opened' });
+  }
   settleBoard(state, actionTurn, events);
   enrage(state, original.exitUnlocked, actionTurn, events);
   return { ok: true, state, events, preview };
@@ -282,6 +303,7 @@ export function previewTurn(
     kills: 0,
     collectedGems: 0,
     rewardValue: 0,
+    rewardCount: 0,
     damage: 0,
     attackers: [],
     blocked: 0,

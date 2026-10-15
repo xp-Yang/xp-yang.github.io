@@ -1,4 +1,8 @@
-import { isSessionData, type SessionData } from '../application/session';
+import {
+  isSessionData,
+  normalizeSessionData,
+  type SessionData,
+} from '../application/session';
 
 export const SAVE_KEY = 'chain-game:save:v1';
 interface StoragePort {
@@ -31,7 +35,7 @@ export class SessionStore {
           /* Preserve invalid data below. */
         }
         if (isSessionData(parsed)) {
-          this.data = parsed;
+          this.data = normalizeSessionData(parsed);
           this.storedRevision = parsed.revision;
           this.storedProfileId = parsed.profile.id;
         } else {

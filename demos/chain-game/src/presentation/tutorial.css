@@ -7,44 +7,46 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px 12px 10px;
-  border: 1px solid #756846;
-  border-radius: 12px;
-  background: #252b23;
+  padding: 12px;
+  border: 2px solid #aa9768;
+  background: #262d3b;
   color: #edf0db;
-  box-shadow: 0 4px 0 #0b1214;
+  box-shadow:
+    inset 2px 2px 0 #776c52,
+    inset -2px -2px 0 #141c2a,
+    4px 4px 0 var(--shadow);
   z-index: 1;
 }
 .tutorial-copy {
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: #756846 transparent;
+  scrollbar-color: #aa9768 #141c2a;
 }
 .tutorial-step {
   display: block;
-  color: #e5c681;
-  font-size: 9px;
-  letter-spacing: 1px;
+  color: #e5cb8b;
+  font-size: 12px;
+  line-height: 1.5;
   margin-bottom: 8px;
 }
 .tutorial-title {
   margin: 0 0 8px;
-  font-size: 15px;
-  line-height: 1.45;
-  font-weight: 600;
+  color: #f0e7c4;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 400;
 }
 .tutorial-body,
 .tutorial-detail {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.8;
+  font-size: 12px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 .tutorial-detail {
   margin-top: 8px;
-  color: #b0b99c;
-  font-size: 10px;
+  color: #aeb7c1;
 }
 .tutorial-actions {
   flex: 0 0 auto;
@@ -52,56 +54,66 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 2px 8px;
+  gap: 4px 8px;
 }
 .tutorial-continue,
 .tutorial-skip {
-  min-height: 40px;
-  border-radius: 7px;
-  font-size: 11px;
-  padding: 6px 9px;
+  min-height: 44px;
+  font-size: 12px;
+  padding: 8px;
 }
 .tutorial-continue {
-  background: #e3cb8c;
-  border: 1px solid #e3cb8c;
-  color: #2d3224;
-  font-weight: 600;
+  background: #e5cb8b;
+  border: 2px solid #aa9768;
+  color: #302d2c;
+  box-shadow:
+    inset 2px 2px 0 #f9e8b5,
+    inset -2px -2px 0 #a88b58,
+    3px 3px 0 var(--shadow);
 }
 .tutorial-continue:hover:not(:disabled) {
-  background: #f4dea8;
+  background: #f2dea7;
+}
+.tutorial-continue:active:not(:disabled) {
+  box-shadow:
+    inset 2px 2px 0 #a88b58,
+    inset -2px -2px 0 #f9e8b5,
+    1px 1px 0 var(--shadow);
 }
 .tutorial-skip {
   margin-left: auto;
   padding-left: 0;
   padding-right: 0;
-  color: #bbc4ae;
+  color: #b9c5cb;
   background: transparent;
   border: 0;
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 .tutorial-skip:hover:not(:disabled) {
-  color: #f3e6bc;
+  color: #f2dea7;
 }
 .tutorial-card.is-busy .tutorial-detail {
-  color: #e5c681;
+  color: #e5cb8b;
 }
 .play-area[data-tutorial-focus='execute'] .execute-button,
 .play-area[data-tutorial-focus='kills'] .kill-counter,
 .play-area[data-tutorial-focus='gems'] .gem-counter,
 .play-area[data-tutorial-focus='health'] .health-block {
-  outline: 2px solid #f3d38d;
+  outline: 2px solid #f5d990;
   outline-offset: 4px;
-  animation: tutorial-focus 1.6s ease-in-out infinite;
+  animation: tutorial-focus 1.2s steps(1, end) infinite;
 }
 @keyframes tutorial-focus {
   50% {
-    outline-color: #b39b69;
+    outline-color: #8d7d5c;
   }
 }
 
 @media (max-width: 760px) and (orientation: portrait), (max-width: 599px) {
   .play-area.has-tutorial {
-    --tutorial-arena-height: max(var(--arena-height), 700px);
-    grid-template-rows: 56px 24px 112px minmax(0, 1fr) 38px 64px 28px;
+    --tutorial-arena-height: max(var(--arena-height), 744px);
+    grid-template-rows: 56px 144px minmax(0, 1fr) 80px 36px;
     height: calc(
       var(--tutorial-arena-height) - max(10px, env(safe-area-inset-top)) -
         max(10px, env(safe-area-inset-bottom))
@@ -109,93 +121,79 @@
   }
   .has-tutorial .tutorial-card {
     grid-column: 1 / -1;
-    grid-row: 3;
+    grid-row: 2;
     align-self: stretch;
     max-height: none;
-    height: 112px;
-    padding: 8px 10px;
+    height: 144px;
+    padding: 8px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 66px;
+    grid-template-columns: minmax(0, 1fr) 76px;
     gap: 8px;
-    border-radius: 9px;
   }
-  .tutorial-step {
-    margin-bottom: 3px;
-    font-size: 8px;
-    letter-spacing: 0.5px;
-  }
+  .tutorial-step,
   .tutorial-title {
-    margin-bottom: 3px;
-    font-size: 12px;
-    line-height: 1.4;
-  }
-  .tutorial-body {
-    font-size: 10px;
-    line-height: 1.6;
+    margin-bottom: 4px;
   }
   .tutorial-detail {
-    margin-top: 3px;
-    font-size: 9px;
-    line-height: 1.5;
+    margin-top: 4px;
   }
   .tutorial-actions {
     flex-direction: column;
     flex-wrap: nowrap;
     justify-content: center;
-    gap: 0;
+    gap: 4px;
   }
   .tutorial-continue,
   .tutorial-skip {
     width: 100%;
-    min-height: 42px;
-    font-size: 10px;
-    padding: 5px 3px;
+    min-height: 44px;
+    padding: 8px 4px;
   }
   .has-tutorial .board-stage {
-    grid-row: 4;
+    grid-row: 3;
     width: min(
       100%,
       calc(
         (var(--tutorial-arena-height) - max(10px, env(safe-area-inset-top)) -
-            max(10px, env(safe-area-inset-bottom)) - 346px) *
+            max(10px, env(safe-area-inset-bottom)) - 332px) *
           var(--board-ratio)
       )
     );
   }
-  .has-tutorial .route-panel {
-    grid-row: 5;
-  }
   .has-tutorial .health-block,
   .has-tutorial .execute-button {
-    grid-row: 6;
+    grid-row: 4;
   }
   .has-tutorial .game-messages {
-    grid-row: 7;
+    grid-row: 5;
   }
 }
 
 @media (min-width: 600px) and (max-height: 640px) and (orientation: landscape) {
   .play-area.has-tutorial {
     height: auto;
-    min-height: calc(var(--arena-height) + 120px);
-    grid-template-rows: 44px minmax(220px, 1fr) 76px 24px 112px;
+    min-height: calc(var(--arena-height) + 144px);
+    grid-template-rows: 44px minmax(220px, 1fr) 104px 36px 144px;
   }
   .has-tutorial .tutorial-card {
     grid-column: 1 / -1;
     grid-row: 5;
     align-self: stretch;
-    max-height: 112px;
+    max-height: 144px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 140px;
-    padding: 10px 14px;
+    padding: 12px;
     gap: 16px;
+  }
+  .has-tutorial .board-stage {
+    grid-row: 1 / 4;
   }
   .tutorial-card .tutorial-step,
   .tutorial-card .tutorial-title {
-    margin-bottom: 3px;
+    margin-bottom: 4px;
   }
   .tutorial-card .tutorial-detail {
-    margin-top: 3px;
+    margin-top: 4px;
   }
   .tutorial-card .tutorial-actions {
     align-content: center;

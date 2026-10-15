@@ -91,6 +91,7 @@ export function createRun(
     B: 'blue',
     G: 'green',
     P: 'purple',
+    R: 'red',
   };
   for (let y = 0; y < level.height; y += 1) {
     for (let x = 0; x < level.width; x += 1) {

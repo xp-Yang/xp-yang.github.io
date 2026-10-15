@@ -177,7 +177,7 @@ export class TutorialController {
         'confirm-exit',
         6,
         '带着宝石离开',
-        '路线已经连到出口。松手后点击执行路线，就能安全离开矿洞，把随身宝石存入仓库。',
+        '路线已经连到出口。松手后按 GO，就能安全离开矿洞，把随身宝石存入仓库。',
         'execute',
         {
           detail: `本次可带回 ${run.carriedGems + preview.collectedGems} 颗宝石`,
@@ -200,14 +200,14 @@ export class TutorialController {
         'inspect-danger',
         5,
         '红框就是危险范围',
-        '小怪会攻击上下左右的格子，刚发怒时下回合才会攻击。避开红框落脚，点击别处关闭范围。',
+        '危险水果会攻击上下左右的格子，刚变危险时下回合才会攻击。避开红框落脚，点击别处关闭范围。',
         'board',
         {
           cells:
             inspected?.kind === 'creep' && inspected.mood === 'angry'
               ? [inspected.pos]
               : [],
-          detail: '多个小怪的攻击会叠加',
+          detail: '多个危险水果的攻击会叠加',
           action: '知道了',
           acknowledge: 'danger',
         },
@@ -228,8 +228,8 @@ export class TutorialController {
         return show(
           'discover-danger',
           5,
-          '小怪开始发怒了',
-          '带红色感叹号的小怪会攻击。轻点标出的小怪，查看闪烁红框标出的危险范围，再规划离开的路线。',
+          '水果变得危险了',
+          '带红色感叹号的水果会攻击。轻点标出的危险水果，查看闪烁红框标出的危险范围，再规划离开的路线。',
           'board',
           {
             cells: [inspectableAngry.pos],
@@ -241,11 +241,11 @@ export class TutorialController {
         'reach-exit',
         6,
         '出口已经打开',
-        '继续连接方块，走到出口下方，再把路线连到顶部出口。消灭更多小怪不是撤离的必要条件。',
+        '继续连接水果，走到出口下方，再把路线连到顶部出口。不必继续切开更多水果就能撤离。',
         'exit',
         {
           cells: [...level.exit.entryCells, level.exit.pos],
-          detail: '宝石在撤离后入库 · 留意红色感叹号的小怪',
+          detail: '宝石在撤离后入库 · 留意红色感叹号的危险水果',
         },
       );
     }
@@ -255,8 +255,8 @@ export class TutorialController {
       return show(
         'color-switched',
         3,
-        '换色连接成功',
-        '经过宝石后，你接上了另一种颜色。可以继续延长路线，也可以松手，点击执行路线出发。',
+        '成功切换水果种类',
+        '经过宝石后，你接上了另一种水果。可以继续延长路线，也可以松手，按 GO 出发。',
         dragging ? 'board' : 'execute',
         {
           detail: `本次连击 ${preview.kills} · 拾取 ${preview.collectedGems} 颗宝石`,
@@ -271,10 +271,10 @@ export class TutorialController {
       return show(
         'gem-switch',
         3,
-        '宝石可以换色',
-        '路线经过宝石后，下一个相邻方块可以换成别的颜色。接上后，再继续连接这种颜色的方块。',
+        '宝石可以切换水果种类',
+        '路线经过宝石后，下一个相邻目标可以换成另一种水果。接上后，再继续连接同种水果。',
         'board',
-        { cells: availableCells(), detail: '也可以在宝石处结束路线，不必换色' },
+        { cells: availableCells(), detail: '也可以在宝石处结束路线，不必切换水果种类' },
       );
 
     if (routeFacts.hasGem && dragging)
@@ -282,7 +282,7 @@ export class TutorialController {
         'gem-in-route',
         3,
         '宝石已经选入',
-        '执行路线后就会收集这颗宝石。现在可以继续连接当前颜色的方块，也可以沿原路回拖调整。',
+        '执行路线后就会收集这颗宝石。现在可以继续连接同种水果，也可以沿原路回拖调整。',
         'board',
         {
           cells: availableCells(),
@@ -295,7 +295,7 @@ export class TutorialController {
         firstAction ? 'confirm-route' : 'first-execution',
         firstAction && routeFacts.hasGem ? 3 : 2,
         routeFacts.hasGem ? '把宝石收入囊中' : '准备好了就出发',
-        '松手只会保留路线。点击右下角执行路线，主角才会行动；想改路线，可以回拖或右键退一步。',
+        '松手只会保留路线。按右下角 GO，主角才会行动；想改路线，可以回拖或右键退一步。',
         'execute',
         {
           detail:
@@ -311,8 +311,8 @@ export class TutorialController {
         return show(
           'first-drag',
           1,
-          '连起同色方块',
-          '从 P 或它旁边的蓝色方块按住拖动，沿同色方块连线。横着、竖着、斜着都可以走。',
+          '连起同种水果',
+          '从武士或它旁边的橙子按住拖动，沿同种水果连线。横着、竖着、斜着都可以走。',
           'board',
           {
             route,
@@ -323,10 +323,10 @@ export class TutorialController {
       return show(
         'extend-first-chain',
         1,
-        preview.kills >= 10 ? '已连满十只' : '试试一笔连十个',
+        preview.kills >= 10 ? '已连满十个' : '试试一笔连十个',
         preview.kills >= 10
-          ? '这条路线已经能生成宝石。松手后再决定是否执行；想调整路线，沿已选方块往回拖即可。'
-          : '一笔击杀 10 只小怪会生成宝石，连得更长，奖励更多。沿原路回拖可以重新规划。',
+          ? '这条路线已经能生成宝石。松手后再决定是否执行；想调整路线，沿已选水果往回拖即可。'
+          : '一笔切开 10 个水果会生成宝石，连得更长，奖励更多。沿原路回拖可以重新规划。',
         'board',
         {
           route,
@@ -341,11 +341,11 @@ export class TutorialController {
         'collect-gem',
         3,
         '收下这颗宝石',
-        '长链产生的宝石会留在棋盘上。把路线连到宝石并执行，才能收集；经过它还可以切换颜色。',
+        '长链产生的宝石会留在棋盘上。把路线连到宝石并执行，才能收集；经过它还可以切换水果种类。',
         'board',
         {
           cells: gems.map((gem) => gem.pos),
-          detail: '先规划能走到宝石旁边的同色路线',
+          detail: '先用同种水果规划能走到宝石旁边的路线',
         },
       );
 
@@ -354,7 +354,7 @@ export class TutorialController {
         'earn-first-gem',
         3,
         '长链会留下宝石',
-        '一次连接并击杀 10 只小怪，会在棋盘上生成宝石。可以先消除短链调整棋盘，寻找更长的路线。',
+        '一次连接并切开 10 个水果，会在棋盘上生成宝石。可以先切开短链调整棋盘，寻找更长的路线。',
         'board',
         {
           cells: dragging ? availableCells() : [],
@@ -368,10 +368,10 @@ export class TutorialController {
       'kill-goal',
       4,
       '打开矿洞出口',
-      '左上角记录本关的累计击杀。消灭 20 只小怪就能打开出口，不用在同一条路线里完成。',
+      '左上角记录本关累计切开的水果。切开 20 个就能打开出口，不用在同一条路线里完成。',
       'kills',
       {
-        detail: `${run.killCount} / ${level.goal} 只小怪${collectedGem ? ' · 已收集的宝石撤离后入库' : ''}`,
+        detail: `${run.killCount} / ${level.goal} 个水果${collectedGem ? ' · 已收集的宝石撤离后入库' : ''}`,
       },
     );
   }

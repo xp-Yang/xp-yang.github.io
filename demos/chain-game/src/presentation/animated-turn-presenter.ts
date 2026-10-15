@@ -1,28 +1,39 @@
 import {
   getLevel,
   samePoint,
-  type ColorId,
+  type Creep,
   type Entity,
   type GameEvent,
+  type Gem,
   type Point,
   type RunState,
 } from '../core';
 import type { TurnPresenter } from './contracts';
+import type { TurnAudio } from './game-audio';
+import {
+  attackClipForStep,
+  facingForStep,
+  samuraiAttackContactOffset,
+  SAMURAI_CLIPS,
+  type SamuraiAttackClipId,
+  type SamuraiFacing,
+  type SamuraiPose,
+} from './samurai-sprites';
 import {
   MOTION_TIMING as TIMING,
+  chainSpeedForFruit,
   type AnimationSink,
   type EntityMotion,
+  type FruitCutMotion,
+  type FruitBurstMotion,
   type MotionFrame,
   type MotionImpact,
   type MotionParticle,
 } from './motion';
 
-const COLORS: Record<ColorId, string> = {
-  blue: '#75bee6',
-  green: '#b7ce82',
-  purple: '#b9a0db',
-};
-const GEM_COLOR = '#f0d27c';
+const GEM_COLOR = '#9ee9f3';
+const FRUIT_CUT_LIFETIME_MS =
+  (TIMING.fruitCutFrameCount / TIMING.fruitCutFps) * 1000;
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const distance = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
 const mix = (a: Point, b: Point, t: number): Point => ({
@@ -35,11 +46,22 @@ interface Hop {
   from: Point;
   to: Point;
   start: number;
+  moveStart: number;
   impact: number;
   end: number;
   distanceBefore: number;
   length: number;
   target?: Entity;
+  visualFrom: Point;
+  visualTo: Point;
+  facing: SamuraiFacing;
+  attackClip?: SamuraiAttackClipId;
+  attackStart?: number;
+  attackEnd?: number;
+  attackRate: number;
+  speed: number;
+  /** Presentation-only randomness is chosen once, using this strike's facing. */
+  cutAngle?: number;
 }
 
 interface FallingEntity {
@@ -52,6 +74,14 @@ interface FallingEntity {
   clipBottom: number;
 }
 
+interface RewardDrop {
+  entity: Gem;
+  victim?: Creep;
+  from: Point;
+  start: number;
+  impact: number;
+}
+
 interface Timeline {
   before: RunState;
   after: RunState;
@@ -60,12 +90,16 @@ interface Timeline {
   hops: Hop[];
   routeStates: RunState[];
   cleared: RunState;
-  rewarded: RunState;
   falling: RunState;
   falls: FallingEntity[];
   attacks: Extract<GameEvent, { type: 'attack' }>[];
-  rewards: Extract<GameEvent, { type: 'gem-spawned' }>[];
-  routeEnd: number;
+  rewardDrops: RewardDrop[];
+  initialFacing: SamuraiFacing;
+  finalFacing: SamuraiFacing;
+  startEnd: number;
+  routeMotionEnd: number;
+  routeRecoveryEnd: number;
+  recoveryEnd: number;
   rewardsAt: number;
   fallAt: number;
   duration: number;
@@ -75,6 +109,7 @@ function buildTimeline(
   before: RunState,
   events: readonly GameEvent[],
   after: RunState,
+  initialFacing: SamuraiFacing,
 ): Timeline {
   const targets = events.flatMap((event) =>
     event.type === 'creep-killed' || event.type === 'gem-collected'
@@ -86,30 +121,82 @@ function buildTimeline(
     route.push(after.player.pos);
 
   const hops: Hop[] = [];
-  let elapsed = 0;
+  const startEnd = route.length > 1 ? SAMURAI_CLIPS.start.durationMs : 0;
+  let elapsed = startEnd;
+  let precedingAttackEnd = 0;
+  let facing = initialFacing;
   let routeLength = 0;
+  let visualFrom = before.player.pos;
+  let fruitCount = 0;
   for (let index = 1; index < route.length; index += 1) {
     const from = route[index - 1];
     const to = route[index];
     const length = distance(from, to);
-    // A long chain picks up a little speed without skipping its individual hits.
+    const target = targets[index - 1];
+    const previousFacing = facing;
+    facing = facingForStep(from, to, previousFacing);
+    const attackClip = target?.kind === 'creep'
+      ? attackClipForStep(from, to, previousFacing)
+      : undefined;
+    const strike = attackClip ? SAMURAI_CLIPS[attackClip] : undefined;
+    if (strike) fruitCount += 1;
+    const speed = chainSpeedForFruit(fruitCount);
+    // One multiplier controls travel and each complete swing. Only fruit cuts
+    // advance it; the old route-index acceleration must not compound with it.
     const travel =
-      Math.max(
-        TIMING.hopTravelMinMs,
-        TIMING.hopTravelBaseMs - index * TIMING.hopAccelerationMs,
-      ) +
-      (length - 1) * TIMING.hopExtraDistanceMs;
+      (TIMING.hopTravelBaseMs + (length - 1) * TIMING.hopExtraDistanceMs) / speed;
+    const attackRate = speed;
+    const contact = (strike?.contactMs ?? 0) / attackRate;
+    // Root movement can continue during the preceding swing's recovery, but
+    // every attack keeps its complete authored sequence before the next one.
+    // Pickups and departures wait for recovery, then use a running pose.
+    const start = strike
+      ? elapsed
+      : Math.max(elapsed, precedingAttackEnd);
+    const attackStart = strike
+      ? Math.max(start + travel - contact, precedingAttackEnd)
+      : undefined;
+    const impact = attackStart === undefined
+      ? start + travel
+      : attackStart + contact;
+    const attackEnd = strike && attackStart !== undefined
+      ? attackStart + strike.durationMs / attackRate
+      : undefined;
+    // Waiting for a swing to recover must not stretch the next movement.
+    const moveStart = Math.max(start, impact - travel);
+    const bladeOffset = attackClip
+      ? samuraiAttackContactOffset(attackClip, facing)
+      : { x: 0, y: 0 };
+    const visualTo = { x: to.x - bladeOffset.x, y: to.y - bladeOffset.y };
+    const end = impact + TIMING.hitPauseMs / speed;
     hops.push({
       from,
       to,
-      start: elapsed,
-      impact: elapsed + travel,
-      end: elapsed + travel + TIMING.hitPauseMs,
+      start,
+      moveStart,
+      impact,
+      end,
       distanceBefore: routeLength,
       length,
-      target: targets[index - 1],
+      target,
+      visualFrom,
+      visualTo,
+      facing,
+      attackClip,
+      attackStart,
+      attackEnd,
+      attackRate,
+      speed,
+      cutAngle: strike
+        ? (facing === 'right'
+            ? (strike.cutAngleRad ?? 0)
+            : Math.PI - (strike.cutAngleRad ?? 0)) +
+          (Math.random() * 2 - 1) * TIMING.fruitCutAngleSpreadRad
+        : undefined,
     });
-    elapsed += travel + TIMING.hitPauseMs;
+    elapsed = end;
+    visualFrom = visualTo;
+    precedingAttackEnd = attackEnd ?? precedingAttackEnd;
     routeLength += length;
   }
 
@@ -130,7 +217,9 @@ function buildTimeline(
   }
   const cleared: RunState = {
     ...snapshot,
-    exitUnlocked: after.exitUnlocked,
+    // Crushing can open the gate later; do not reveal its kills before impact.
+    exitUnlocked: snapshot.exitUnlocked ||
+      snapshot.killCount >= getLevel(before.levelId).goal,
     player: { ...after.player },
     equipmentRuntime: after.equipmentRuntime,
   };
@@ -142,18 +231,53 @@ function buildTimeline(
     (event): event is Extract<GameEvent, { type: 'gem-spawned' }> =>
       event.type === 'gem-spawned',
   );
-  const rewarded: RunState = {
-    ...cleared,
-    entities: {
-      ...cleared.entities,
-      ...Object.fromEntries(
-        rewards.map((event) => [event.entity.id, event.entity]),
-      ),
-    },
-  };
-  const routeEnd = elapsed;
-  const rewardsAt = routeEnd + (attacks.length > 0 ? TIMING.attackMs : 0);
-  const fallAt = rewardsAt + TIMING.clearPauseMs;
+  const routeMotionEnd = elapsed;
+  const routeRecoveryEnd = Math.max(routeMotionEnd, precedingAttackEnd);
+  const recoveryEnd = routeRecoveryEnd +
+    (hops.length > 0 ? SAMURAI_CLIPS.stop.durationMs : 0);
+  const retaliationDuration = attacks.length > 0
+    ? Math.max(
+        TIMING.attackMs,
+        attacks.some((attack) => !attack.blocked)
+          ? SAMURAI_CLIPS.hurt.durationMs
+          : 0,
+      )
+    : 0;
+  const rewardsAt = recoveryEnd + retaliationDuration;
+  const crushedByGem = new Map(
+    events.flatMap((event) => event.type === 'creep-crushed'
+      ? [[event.gemId, event.entity] as const]
+      : []),
+  );
+  const rewardDrops: RewardDrop[] = rewards.map((event, index) => {
+    const from = { x: event.entity.pos.x, y: -1.2 };
+    const start = rewardsAt + index * TIMING.rewardFallStaggerMs;
+    const duration = Math.min(
+      TIMING.rewardFallMaxMs,
+      TIMING.rewardFallBaseMs +
+        Math.sqrt(event.entity.pos.y - from.y) * TIMING.rewardFallDistanceMs,
+    );
+    return {
+      entity: event.entity,
+      victim: crushedByGem.get(event.entity.id),
+      from,
+      start,
+      impact: start + duration,
+    };
+  });
+  const fruitCutsEnd = Math.max(
+    0,
+    ...hops
+      .filter((hop) => hop.target?.kind === 'creep')
+      .map((hop) => hop.impact + FRUIT_CUT_LIFETIME_MS),
+  );
+  const rewardEffectsEnd = Math.max(
+    rewardsAt,
+    ...rewardDrops.map((drop) => drop.impact +
+      (drop.victim ? TIMING.rewardCrushMs : TIMING.landingMs)),
+  );
+  // Finish all blade cuts, reward impacts and fruit explosions before refill.
+  const fallAt = Math.max(rewardEffectsEnd, fruitCutsEnd) + TIMING.clearPauseMs;
 
   // New rage is revealed only after the board finishes settling.
   const falling: RunState = {
@@ -245,7 +369,7 @@ function buildTimeline(
       ? fallAt +
         Math.max(0, ...falls.map((fall) => fall.start + fall.duration)) +
         TIMING.landingMs
-      : rewardsAt + TIMING.exitFadeMs;
+      : Math.max(rewardsAt + TIMING.exitFadeMs, fruitCutsEnd);
   return {
     before,
     after,
@@ -254,12 +378,16 @@ function buildTimeline(
     hops,
     routeStates,
     cleared,
-    rewarded,
     falling,
     falls,
     attacks,
-    rewards,
-    routeEnd,
+    rewardDrops,
+    initialFacing,
+    finalFacing: facing,
+    startEnd,
+    routeMotionEnd,
+    routeRecoveryEnd,
+    recoveryEnd,
     rewardsAt,
     fallAt,
     duration,
@@ -281,30 +409,28 @@ function pointOnRoute(route: readonly Point[], progress: number): Point {
   return route[route.length - 1];
 }
 
-function addBurst(
+function addGemBurst(
   particles: MotionParticle[],
   impacts: MotionImpact[],
   pos: Point,
-  color: string,
   age: number,
-  gem: boolean,
 ): void {
-  const life = gem ? TIMING.gemParticleLifetimeMs : TIMING.fragmentLifetimeMs;
+  const life = TIMING.gemParticleLifetimeMs;
   if (age < 0 || age >= life) return;
   const t = age / life;
-  const pieces = gem ? 10 : 8;
+  const pieces = 10;
   for (let index = 0; index < pieces; index += 1) {
-    const angle = (index / pieces) * Math.PI * 2 + (gem ? 0 : Math.PI / 8);
+    const angle = (index / pieces) * Math.PI * 2;
     const speed = 0.46 + (index % 3) * 0.14;
     const radial = speed * (t * 1.5 - t * t * 0.35);
     particles.push({
       pos: {
         x: pos.x + Math.cos(angle) * radial,
-        y: pos.y + Math.sin(angle) * radial + (gem ? -0.12 : 0.28) * t * t,
+        y: pos.y + Math.sin(angle) * radial - 0.12 * t * t,
       },
-      size: (gem ? 0.075 : 0.13 + (index % 2) * 0.035) * (1 - t * 0.6),
+      size: 0.075 * (1 - t * 0.6),
       rotation: angle + t * (index % 2 === 0 ? 3.5 : -3.5),
-      color,
+      color: GEM_COLOR,
       alpha: Math.pow(1 - t, 1.25),
     });
   }
@@ -314,9 +440,106 @@ function addBurst(
       pos,
       radius: 0.18 + pulse * 0.51,
       alpha: (1 - pulse) * 0.9,
-      color: gem ? '#fff2b3' : '#f4ffe2',
+      color: '#fff2b3',
     });
   }
+}
+
+function addFruitCut(
+  fruitCuts: FruitCutMotion[],
+  hop: Hop,
+  age: number,
+): void {
+  if (hop.target?.kind !== 'creep' || hop.cutAngle === undefined || age < 0)
+    return;
+  // Sample authored animation frames from elapsed time, so dropped RAF calls
+  // never extend a fruit's lifetime or choose a different split direction.
+  const frame = Math.floor((age * TIMING.fruitCutFps) / 1000);
+  if (frame >= TIMING.fruitCutFrameCount) return;
+  const progress = frame / Math.max(1, TIMING.fruitCutFrameCount - 1);
+  fruitCuts.push({
+    entity: hop.target,
+    angle: hop.cutAngle,
+    separation:
+      TIMING.fruitCutInitialSeparation +
+      (TIMING.fruitCutMaxSeparation - TIMING.fruitCutInitialSeparation) *
+        smooth(progress),
+    alpha: 1 - clamp(
+      (progress - TIMING.fruitCutFadeStart) / (1 - TIMING.fruitCutFadeStart),
+    ),
+  });
+}
+
+function spriteAt(timeline: Timeline, elapsed: number): SamuraiPose {
+  const { hops, initialFacing, finalFacing } = timeline;
+  if (elapsed < timeline.startEnd)
+    return {
+      clip: 'start',
+      elapsedMs: elapsed,
+      facing: hops[0]?.facing ?? initialFacing,
+    };
+
+  // Running can turn toward the next move; a swing keeps its own direction.
+  let movementFacing = hops[0]?.facing ?? initialFacing;
+  for (const hop of hops) {
+    if (elapsed < hop.moveStart) break;
+    movementFacing = hop.facing;
+  }
+  for (const hop of hops) {
+    if (
+      hop.attackStart !== undefined &&
+      hop.attackEnd !== undefined &&
+      hop.attackClip !== undefined &&
+      elapsed >= hop.attackStart &&
+      elapsed < hop.attackEnd
+    ) {
+      const contactMs = SAMURAI_CLIPS[hop.attackClip].contactMs ?? 0;
+      const clipElapsed = (elapsed - hop.attackStart) * hop.attackRate;
+      return {
+        clip: hop.attackClip,
+        // Use the same boundary as fruit removal, including floating-point ties.
+        elapsedMs:
+          elapsed >= hop.impact
+            ? Math.max(contactMs, clipElapsed)
+            : Math.min(Math.max(0, contactMs - 0.001), clipElapsed),
+        facing: hop.facing,
+      };
+    }
+  }
+
+  if (elapsed < timeline.routeRecoveryEnd) {
+    // Integrate each hop's rate so accelerating does not skip running frames.
+    // Multiplying the whole elapsed time by the newest rate would jump poses.
+    let runElapsed = 0;
+    for (const hop of hops) {
+      if (elapsed < hop.start) break;
+      runElapsed += Math.min(elapsed - hop.start, hop.end - hop.start) * hop.speed;
+    }
+    return {
+      clip: 'run',
+      elapsedMs: runElapsed,
+      facing: movementFacing,
+    };
+  }
+  if (elapsed < timeline.recoveryEnd)
+    return {
+      clip: 'stop',
+      elapsedMs: elapsed - timeline.routeRecoveryEnd,
+      facing: finalFacing,
+    };
+
+  const attackAge = elapsed - timeline.recoveryEnd;
+  if (
+    timeline.attacks.some((attack) => !attack.blocked) &&
+    attackAge < SAMURAI_CLIPS.hurt.durationMs
+  )
+    return { clip: 'hurt', elapsedMs: attackAge, facing: finalFacing };
+
+  return {
+    clip: 'idle',
+    elapsedMs: Math.max(0, elapsed - timeline.recoveryEnd),
+    facing: finalFacing,
+  };
 }
 
 function frameAt(timeline: Timeline, elapsed: number): MotionFrame {
@@ -330,69 +553,83 @@ function frameAt(timeline: Timeline, elapsed: number): MotionFrame {
         scaleX: 1,
         scaleY: 1,
         alpha: after.status === 'escaped' ? 0 : 1,
+        sprite: { clip: 'idle', elapsedMs: 0, facing: timeline.finalFacing },
       },
       entities: {},
       particles: [],
       impacts: [],
+      fruitCuts: [],
+      fruitBursts: [],
       route: [],
       routeProgress: timeline.routeLength,
       playerTrail: [],
     };
 
   let playerPos = before.player.pos;
-  let scaleX = 1;
-  let scaleY = 1;
   let routeProgress = 0;
   let completedTargets = 0;
   const particles: MotionParticle[] = [];
   const impacts: MotionImpact[] = [];
+  const fruitCuts: FruitCutMotion[] = [];
+  const fruitBursts: FruitBurstMotion[] = [];
   const entities: Record<string, EntityMotion> = {};
   for (const hop of hops) {
     if (elapsed < hop.start) break;
     if (elapsed < hop.impact) {
-      const t = smooth(clamp((elapsed - hop.start) / (hop.impact - hop.start)));
-      playerPos = mix(hop.from, hop.to, t);
+      const t = smooth(
+        clamp((elapsed - hop.moveStart) / (hop.impact - hop.moveStart)),
+      );
+      playerPos = mix(hop.visualFrom, hop.visualTo, t);
       routeProgress = hop.distanceBefore + hop.length * t;
-      const stretch = Math.sin(t * Math.PI) * 0.11;
-      scaleX = 1 + stretch;
-      scaleY = 1 - stretch * 0.65;
       break;
     }
-    playerPos = hop.to;
+    playerPos = hop.visualTo;
     routeProgress = hop.distanceBefore + hop.length;
     if (hop.target) completedTargets += 1;
-    const age = elapsed - hop.impact;
-    if (age < TIMING.hitPauseMs) {
-      const punch = Math.sin((age / TIMING.hitPauseMs) * Math.PI);
-      scaleX = 1 + punch * 0.18;
-      scaleY = 1 - punch * 0.17;
-    }
   }
   for (const hop of hops) {
     if (!hop.target) continue;
-    addBurst(
-      particles,
-      impacts,
-      hop.to,
-      hop.target.kind === 'creep' ? COLORS[hop.target.color] : GEM_COLOR,
-      elapsed - hop.impact,
-      hop.target.kind === 'gem',
-    );
+    if (hop.target.kind === 'creep')
+      addFruitCut(fruitCuts, hop, elapsed - hop.impact);
+    else
+      addGemBurst(particles, impacts, hop.to, elapsed - hop.impact);
   }
 
   let phase: MotionFrame['phase'] = 'route';
   let state = timeline.routeStates[completedTargets];
-  if (elapsed >= timeline.routeEnd) {
+  if (elapsed >= timeline.routeMotionEnd) {
     phase = 'settle';
-    state = timeline.cleared;
-    playerPos = after.player.pos;
+    // The turn is already saved, but health and shield consumption are revealed
+    // when the endpoint retaliation starts, after the final swing and stop.
+    state = timeline.attacks.length > 0 && elapsed < timeline.recoveryEnd
+      ? {
+          ...timeline.cleared,
+          player: { ...timeline.cleared.player, hp: before.player.hp },
+          equipmentRuntime: before.equipmentRuntime,
+        }
+      : timeline.cleared;
+    // Finish the last swing in front of the fruit, then settle into its cell.
+    // Keep this purely visual: the committed player position is already final.
+    const settle = smooth(
+      clamp(
+        (elapsed - timeline.routeMotionEnd) /
+          Math.max(1, timeline.routeRecoveryEnd - timeline.routeMotionEnd),
+      ),
+    );
+    playerPos = mix(
+      hops[hops.length - 1]?.visualTo ?? after.player.pos,
+      after.player.pos,
+      settle,
+    );
     routeProgress = timeline.routeLength;
-    const attackAge = elapsed - timeline.routeEnd;
-    if (timeline.attacks.length && elapsed < timeline.rewardsAt) {
+    const attackAge = elapsed - timeline.recoveryEnd;
+    if (
+      timeline.attacks.length &&
+      elapsed >= timeline.recoveryEnd &&
+      elapsed < timeline.recoveryEnd + TIMING.attackMs
+    ) {
       phase = 'impact';
       const pulse = Math.sin(clamp(attackAge / TIMING.attackMs) * Math.PI);
-      scaleX = 1 + pulse * 0.09;
-      scaleY = 1 - pulse * 0.09;
       for (const attack of timeline.attacks) {
         const direction = mix(attack.from, attack.to, pulse * 0.14);
         entities[attack.attackerId] = { pos: direction };
@@ -405,19 +642,55 @@ function frameAt(timeline: Timeline, elapsed: number): MotionFrame {
       }
     }
     if (after.status === 'playing' && elapsed >= timeline.rewardsAt) {
-      state = timeline.rewarded;
-      for (const reward of timeline.rewards) {
-        const appear = clamp(
-          (elapsed - timeline.rewardsAt) / TIMING.rewardAppearMs,
+      phase = 'reward';
+      const rewardEntities = { ...timeline.cleared.entities };
+      const level = getLevel(after.levelId);
+      let crushed = 0;
+      for (const drop of timeline.rewardDrops) {
+        if (elapsed < drop.start) continue;
+        // Keep the target fruit alive under its descending gem stack until the
+        // very same impact boundary that starts the radial fragment effect.
+        rewardEntities[drop.entity.id] = drop.entity;
+        const progress = clamp(
+          (elapsed - drop.start) / (drop.impact - drop.start),
         );
-        const pop = 1 + Math.sin(appear * Math.PI) * 0.22;
-        entities[reward.entity.id] = {
-          pos: reward.entity.pos,
-          alpha: appear,
-          scaleX: pop,
-          scaleY: pop,
+        const landing = clamp((elapsed - drop.impact) / TIMING.landingMs);
+        const squash = Math.sin(landing * Math.PI) * 0.16;
+        entities[drop.entity.id] = {
+          pos: mix(drop.from, drop.entity.pos, progress * progress),
+          scaleX: 1 + squash,
+          scaleY: 1 - squash,
+          clipTop: -0.5,
+          clipBottom: level.height - 0.5,
         };
+        if (elapsed < drop.impact) continue;
+        const age = elapsed - drop.impact;
+        if (drop.victim) {
+          delete rewardEntities[drop.victim.id];
+          crushed += 1;
+          if (age < TIMING.rewardCrushMs)
+            fruitBursts.push({
+              entity: drop.victim,
+              progress: clamp(age / TIMING.rewardCrushMs),
+            });
+        }
+        if (age < TIMING.impactPulseMs) {
+          const pulse = age / TIMING.impactPulseMs;
+          impacts.push({
+            pos: drop.entity.pos,
+            radius: 0.18 + pulse * 0.48,
+            alpha: (1 - pulse) * 0.9,
+            color: '#b7f5ff',
+          });
+        }
       }
+      state = {
+        ...timeline.cleared,
+        entities: rewardEntities,
+        killCount: timeline.cleared.killCount + crushed,
+        exitUnlocked: timeline.cleared.exitUnlocked ||
+          timeline.cleared.killCount + crushed >= level.goal,
+      };
     }
     if (after.status === 'playing' && elapsed >= timeline.fallAt) {
       phase = 'refill';
@@ -448,16 +721,24 @@ function frameAt(timeline: Timeline, elapsed: number): MotionFrame {
       if (progress >= 0) playerTrail.push(pointOnRoute(route, progress));
     }
   const escapeAlpha =
-    after.status === 'escaped' && elapsed >= timeline.routeEnd
-      ? 1 - clamp((elapsed - timeline.routeEnd) / TIMING.exitFadeMs)
+    after.status === 'escaped' && elapsed >= timeline.recoveryEnd
+      ? 1 - clamp((elapsed - timeline.recoveryEnd) / TIMING.exitFadeMs)
       : 1;
   return {
     phase,
     state,
-    player: { pos: playerPos, scaleX, scaleY, alpha: escapeAlpha },
+    player: {
+      pos: playerPos,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: escapeAlpha,
+      sprite: spriteAt(timeline, elapsed),
+    },
     entities,
     particles,
     impacts,
+    fruitCuts,
+    fruitBursts,
     route: phase === 'route' ? route : [],
     routeProgress,
     playerTrail,
@@ -468,7 +749,7 @@ function frameAt(timeline: Timeline, elapsed: number): MotionFrame {
 export class AnimatedTurnPresenter implements TurnPresenter {
   private finishCurrent: (() => void) | null = null;
 
-  constructor(private sink: AnimationSink) {}
+  constructor(private sink: AnimationSink, private audio?: TurnAudio) {}
 
   play(
     before: RunState,
@@ -477,7 +758,12 @@ export class AnimatedTurnPresenter implements TurnPresenter {
     signal: AbortSignal,
   ): Promise<void> {
     this.finishImmediately();
-    const timeline = buildTimeline(before, events, after);
+    const timeline = buildTimeline(
+      before,
+      events,
+      after,
+      this.sink.playerFacing ?? 'right',
+    );
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const drawFinalFrame = () => {
       try {
@@ -494,10 +780,13 @@ export class AnimatedTurnPresenter implements TurnPresenter {
       let request = 0;
       let finished = false;
       let startedAt: number | null = null;
+      const strikes = timeline.hops.filter((hop) => hop.attackClip && hop.target?.kind === 'creep');
+      let nextStrike = 0;
       const finish = () => {
         if (finished) return;
         finished = true;
         window.cancelAnimationFrame(request);
+        this.audio?.stop();
         signal.removeEventListener('abort', finish);
         document.removeEventListener('visibilitychange', onVisibility);
         reducedMotion.removeEventListener('change', onMotionPreference);
@@ -521,6 +810,14 @@ export class AnimatedTurnPresenter implements TurnPresenter {
         }
         try {
           this.sink.setAnimation(frameAt(timeline, elapsed));
+          // Consume contact boundaries once, independent of render/frame sampling.
+          // A stalled frame discards old contacts instead of producing a burst.
+          let latest: Hop | undefined;
+          while (nextStrike < strikes.length && strikes[nextStrike].impact <= elapsed) {
+            latest = strikes[nextStrike++];
+          }
+          if (latest && elapsed - latest.impact < 100)
+            this.audio?.slash(latest.speed, latest.attackClip === 'slam');
           if (!finished) request = window.requestAnimationFrame(tick);
         } catch {
           finish();

@@ -110,6 +110,22 @@ export function commitPath(
   };
 }
 
+/** Keep existing tutorial boards while adopting its updated fruit palette. */
+export function normalizeSessionData(data: SessionData): SessionData {
+  if (data.run.levelId !== 'level-001') return data;
+  let changed = false;
+  const entities: RunState['entities'] = {};
+  for (const [id, entity] of Object.entries(data.run.entities)) {
+    if (entity.kind === 'creep' && entity.color === 'green') {
+      entities[id] = { ...entity, color: 'red' };
+      changed = true;
+    } else {
+      entities[id] = entity;
+    }
+  }
+  return changed ? { ...data, run: { ...data.run, entities } } : data;
+}
+
 /** Validate persisted state before allowing it to reach input or rendering. */
 export function isSessionData(value: unknown): value is SessionData {
   try {
@@ -307,7 +323,7 @@ export function isSessionData(value: unknown): value is SessionData {
         return false;
       if (entity.kind === 'creep') {
         if (
-          !['blue', 'green', 'purple'].includes(entity.color) ||
+          !['blue', 'green', 'purple', 'red'].includes(entity.color) ||
           !['calm', 'angry'].includes(entity.mood)
         )
           return false;

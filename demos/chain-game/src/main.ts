@@ -1,10 +1,14 @@
+import './assets/ui/font.css';
 import './styles.css';
 import {
   getLevel,
+  inspectPath,
   LEVELS,
   legalTargets,
   previewTurn,
   type GameEvent,
+  type RunState,
+  type TurnPreview,
 } from './core';
 import {
   commitPath,
@@ -17,9 +21,12 @@ import { TutorialController, type TutorialView } from './application/tutorial';
 import { SessionStore } from './platform/storage';
 import { registerOfflineSupport } from './platform/offline';
 import { CanvasRenderer } from './presentation/canvas-renderer';
-import { GEM_ICON_PATH } from './presentation/gem-visual';
+import { GEM_ICON_URL, gemClusterPlacements } from './presentation/gem-visual';
+import { boardAspectRatio } from './presentation/board-geometry';
+import { pixelIcon } from './presentation/pixel-icons';
 import { attachInput } from './presentation/input';
 import { AnimatedTurnPresenter } from './presentation/animated-turn-presenter';
+import { GameAudio } from './presentation/game-audio';
 import { TutorialPresenter } from './presentation/tutorial-presenter';
 
 const seed = () => crypto.getRandomValues(new Uint32Array(1))[0];
@@ -39,51 +46,86 @@ let tutorialView: TutorialView | null = null;
 let path: readonly string[] = [];
 let inspectedEntityId: string | null = null;
 let busy = false;
+let assetError = '';
 let message = '';
 let pendingAction: (() => void) | null = null;
+let renderRequest = 0;
+let cachedPreview: {
+  run: RunState;
+  path: readonly string[];
+  value: TurnPreview;
+} | null = null;
 
-const hudIcon = (content: string) =>
-  `<svg class="hud-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${content}</svg>`;
 const icons = {
-  kills: hudIcon(
-    '<path d="M5 14.5a8 8 0 1 1 14 0l-2 1.5v4H7v-4z"/><path d="M10 17v3m4-3v3"/><circle cx="9" cy="10.5" r="1.5"/><circle cx="15" cy="10.5" r="1.5"/>',
-  ),
-  gems: hudIcon(`<path d="${GEM_ICON_PATH}"/>`),
-  execute: hudIcon('<path d="m6 18 12-12M6 6h12v12"/>'),
-  menu: hudIcon('<path d="M4 6h16M4 12h16M4 18h16"/>'),
+  kills: pixelIcon('skull'),
+  gems: `<img class="hud-icon pixel-art" src="${GEM_ICON_URL}" alt="" aria-hidden="true"/>`,
+  execute: pixelIcon('arrow'),
+  menu: pixelIcon('menu'),
+  help: pixelIcon('help'),
+  close: pixelIcon('close'),
+  heart: pixelIcon('heart'),
+  lock: pixelIcon('lock'),
 };
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <main class="game-layout">
     <section id="play-area" class="play-area" aria-label="游戏棋盘">
       <section class="hud-counters" aria-label="关卡战绩">
-        <div class="kill-counter hud-plaque" aria-describedby="objective-label">
-          ${icons.kills}<div><span class="hud-label">击杀</span><strong id="objective-count"></strong></div>
+        <div class="kill-counter hud-plaque" role="group" aria-label="切开进度" aria-describedby="objective-label">
+          ${icons.kills}<div><strong id="objective-count"></strong></div>
           <div class="progress-track" aria-hidden="true"><div id="progress-fill"></div></div>
         </div>
-        <div class="gem-counter hud-plaque">${icons.gems}<div><span class="hud-label">已收集宝石</span><strong id="carried">0</strong></div></div>
+        <div class="gem-counter hud-plaque" role="group" aria-label="已收集宝石">${icons.gems}<div><strong id="carried">0</strong></div></div>
         <p id="objective-label" class="sr-only"></p>
       </section>
-      <header class="level-heading"><span class="eyebrow" id="level-number"></span><h1 id="level-title"></h1><span class="turn-counter">回合 <b id="turn">0</b></span></header>
-      <nav class="top-actions" aria-label="游戏菜单"><button class="icon-button" id="help-button" aria-label="玩法说明">?</button><button class="icon-button" id="menu-button" aria-label="打开菜单">${icons.menu}</button></nav>
+      <nav class="top-actions" aria-label="游戏菜单"><button class="icon-button" id="help-button" aria-label="玩法说明">${icons.help}</button><button class="icon-button" id="menu-button" aria-label="打开菜单">${icons.menu}</button></nav>
       <div class="board-stage"><canvas id="board" tabindex="0"></canvas><div id="result" class="result-overlay" hidden></div></div>
-      <section class="route-panel" aria-label="路线规划">
-        <div id="route-preview" class="preview" aria-live="polite" aria-atomic="true" hidden><div><span>连击</span><strong id="chain-count">—</strong></div><div><span>拾取宝石</span><strong id="pickup-count">—</strong></div><div><span>生成宝石</span><strong id="reward-count">—</strong></div><div id="damage-metric"><span>预计伤害</span><strong id="damage-count">—</strong></div></div>
-      </section>
-      <section class="health-block hud-plaque" aria-label="生命值"><span class="hud-label">生命</span><span id="health" class="hearts" role="img"></span></section>
-      <button id="execute" class="primary execute-button"><span class="execute-icon">${icons.execute}</span><span class="execute-label">执行路线</span></button>
-      <div class="game-messages"><p id="hint" class="hint" role="status"></p><p id="notice" class="notice" role="alert" hidden></p></div>
+      <section class="health-block hud-plaque" aria-label="生命值"><span id="health" class="hearts" role="img"></span></section>
+      <button id="execute" class="primary execute-button" aria-label="执行路线" aria-describedby="route-summary" aria-keyshortcuts="Space Enter"><span id="execute-gems" class="execute-gem-background" aria-hidden="true" hidden></span><span id="route-preview" class="execute-preview" aria-hidden="true" hidden><span class="execute-metric execute-chain">${icons.kills}<strong id="chain-count">0</strong></span></span><span class="execute-label">GO</span><kbd class="execute-shortcut" aria-hidden="true"><span class="shortcut-key">${pixelIcon('space')}</span></kbd></button>
+      <span id="route-summary" class="sr-only" aria-live="polite" aria-atomic="true"></span>
+      <div class="game-messages"><p id="hint" class="sr-only" role="status"></p><p id="notice" class="notice" role="alert" hidden></p></div>
     </section>
   </main>
-  <dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-heading"><h2 id="dialog-title"></h2><button id="close-dialog" class="icon-button" aria-label="关闭">×</button></div><div id="dialog-body"></div></dialog>
+  <dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-heading"><h2 id="dialog-title"></h2><button id="close-dialog" class="icon-button" aria-label="关闭">${icons.close}</button></div><div id="dialog-body"></div></dialog>
 `;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('board');
 const dialog = $<HTMLDialogElement>('dialog');
+const executeButton = $<HTMLButtonElement>('execute');
+const executeGems = $('execute-gems');
+let displayedRewardCount = -1;
+
+function renderGeneratedGems(count: number): void {
+  if (count === displayedRewardCount) return;
+  displayedRewardCount = count;
+  executeGems.hidden = count === 0;
+  if (count === 0) {
+    executeGems.replaceChildren();
+    return;
+  }
+  executeGems.replaceChildren(
+    ...gemClusterPlacements(count).map(({ x, y, size }) => {
+      const gem = document.createElement('img');
+      gem.src = GEM_ICON_URL;
+      gem.alt = '';
+      gem.draggable = false;
+      gem.className = 'pixel-art';
+      gem.style.left = `${50 + x * 100}%`;
+      gem.style.top = `${50 + y * 100}%`;
+      gem.style.width = `${size * 100}%`;
+      return gem;
+    }),
+  );
+}
+
 const renderer = new CanvasRenderer(canvas);
-const presenter = new AnimatedTurnPresenter(renderer);
+const audio = new GameAudio();
+// Unlock from real input, before route editing or GO can request a sound.
+document.addEventListener('pointerdown', () => audio.unlock(), { capture: true });
+document.addEventListener('keydown', () => audio.unlock(), { capture: true });
+const presenter = new AnimatedTurnPresenter(renderer, audio);
 const tutorialPresenter = new TutorialPresenter($('play-area'), {
   skip: () => {
     if (busy || input.isDragging() || dialog.open) return;
@@ -102,8 +144,16 @@ const input = attachInput(canvas, {
   undo: () => changePath({ type: 'undo' }),
   clear: () => changePath({ type: 'clear' }),
   commit: () => void commit(),
-  enabled: () => !busy && !dialog.open && store.data.run.status === 'playing',
-  onDraggingChange: () => render(),
+  enabled: () =>
+    renderer.assetsReady &&
+    !busy &&
+    !dialog.open &&
+    store.data.run.status === 'playing',
+  onDraggingChange: () => {
+    // finishDrag clears its pointer synchronously: unlock before any repaint.
+    updateControls();
+    requestRender();
+  },
   onMenu: () => openMenu(),
   tap: handleTap,
   onInteractionStart: () => inspectEntity(null),
@@ -133,7 +183,7 @@ function inspectEntity(id: string | null): void {
       : null;
   if (next === inspectedEntityId) return;
   inspectedEntityId = next;
-  render();
+  requestRender();
 }
 
 function changePath(command: Parameters<typeof editPath>[2]): boolean {
@@ -141,42 +191,79 @@ function changePath(command: Parameters<typeof editPath>[2]): boolean {
   inspectEntity(null);
   const next = editPath(store.data.run, path, command);
   if (next === path) return false;
+  if (next.length > path.length &&
+      store.data.run.entities[next[next.length - 1]]?.kind === 'creep') {
+    audio.count(inspectPath(store.data.run, next).kills);
+  }
   path = next;
   message = '';
-  render();
+  updateControls();
+  requestRender();
   return true;
+}
+
+function requestRender(): void {
+  if (renderRequest) return;
+  renderRequest = requestAnimationFrame(() => {
+    renderRequest = 0;
+    render();
+  });
+}
+
+function cancelScheduledRender(): void {
+  if (renderRequest) cancelAnimationFrame(renderRequest);
+  renderRequest = 0;
+}
+
+function currentPreview(): TurnPreview {
+  const run = store.data.run;
+  if (cachedPreview?.run === run && cachedPreview.path === path)
+    return cachedPreview.value;
+  const value = previewTurn(run, path);
+  cachedPreview = { run, path, value };
+  return value;
 }
 
 function updateControls(): void {
   const locked =
     busy ||
+    !renderer.assetsReady ||
     input.isDragging() ||
     store.data.run.status !== 'playing' ||
     dialog.open;
-  $<HTMLButtonElement>('execute').disabled =
-    locked || !previewTurn(store.data.run, path).valid;
+  // Enabling GO only needs path validity; do not simulate rewards and gravity.
+  const route = inspectPath(store.data.run, path);
+  executeButton.disabled = locked || !route.valid;
+  executeButton.dataset.mode = busy ? 'busy' : route.exits ? 'exit' : 'route';
+  executeButton.setAttribute('aria-busy', String(busy || !renderer.assetsReady));
+  executeButton.setAttribute(
+    'aria-label',
+    busy ? '行动中' : route.exits ? '确认撤离' : '执行路线',
+  );
   for (const id of ['menu-button', 'help-button', 'close-dialog'])
     $<HTMLButtonElement>(id).disabled = busy;
-  canvas.setAttribute('aria-busy', String(busy));
+  canvas.setAttribute('aria-busy', String(busy || !renderer.assetsReady));
   tutorialPresenter.render(
     tutorialView,
     busy,
     input.isDragging() || dialog.open,
   );
   if (busy) {
-    $('execute').querySelector<HTMLElement>('.execute-label')!.textContent =
-      '行动中…';
-    $('execute').dataset.mode = 'busy';
     $('hint').textContent = '沿路线行动中…';
     $('hint').classList.remove('danger-text');
     for (const button of document.querySelectorAll<HTMLButtonElement>(
       '#dialog button, #result button',
     ))
       button.disabled = true;
+  } else if (!renderer.assetsReady) {
+    executeButton.setAttribute('aria-label', assetError ? '加载失败' : '载入中');
+    $('hint').textContent = assetError || '正在载入…';
+    $('hint').classList.remove('danger-text');
   }
 }
 
 function render(): void {
+  cancelScheduledRender();
   // The saved run is already final while the presenter is still showing the
   // accepted route. Storage notices must not replace that display mid-action.
   if (busy) {
@@ -187,45 +274,31 @@ function render(): void {
   }
   const { run, profile } = store.data;
   const level = getLevel(run.levelId);
-  const preview = previewTurn(run, path);
-  const index = LEVELS.findIndex((item) => item.id === level.id);
+  const preview = currentPreview();
   document.documentElement.style.setProperty(
     '--board-ratio',
-    String((level.width + 0.5) / (level.height + 1.25)),
+    String(boardAspectRatio(level.width, level.height)),
   );
   $('health').innerHTML = [0, 1, 2]
     .map(
       (i) =>
-        `<span class="${i < profile.health ? '' : 'lost'}" aria-hidden="true">♥</span>`,
+        `<span class="${i < profile.health ? '' : 'lost'}" aria-hidden="true">${icons.heart}</span>`,
     )
     .join('');
   $('health').setAttribute('aria-label', `剩余 ${profile.health} / 3 点生命`);
   $('carried').textContent = String(run.carriedGems);
-  $('level-number').textContent =
-    `关卡 ${String(index + 1).padStart(2, '0')} / ${String(LEVELS.length).padStart(2, '0')}`;
-  $('level-title').textContent = level.name;
-  $('turn').textContent = String(run.turn);
   $('objective-label').textContent = run.exitUnlocked
     ? '出口已打开 · 走到上方出口撤离'
-    : `击杀 ${level.goal} 只小怪，打开出口`;
+    : `切开 ${level.goal} 个水果，打开出口`;
   $('objective-count').textContent = `${run.killCount} / ${level.goal}`;
   $('progress-fill').style.width =
     `${Math.min(100, (run.killCount / level.goal) * 100)}%`;
   $('route-preview').hidden = path.length === 0;
-  $('chain-count').textContent = path.length ? String(preview.kills) : '—';
-  $('pickup-count').textContent = path.length
-    ? `+${preview.collectedGems}`
-    : '—';
-  $('reward-count').textContent = path.length ? `+${preview.rewardValue}` : '—';
-  $('damage-count').textContent = path.length
-    ? preview.damage
-      ? `−${preview.damage} ♥`
-      : '安全'
-    : '—';
-  $('damage-metric').classList.toggle('danger', preview.damage > 0);
-  $('execute').querySelector<HTMLElement>('.execute-label')!.textContent =
-    preview.exits ? '确认撤离' : '执行路线';
-  $('execute').dataset.mode = preview.exits ? 'exit' : 'route';
+  $('chain-count').textContent = String(preview.kills);
+  renderGeneratedGems(path.length ? preview.rewardCount : 0);
+  $('route-summary').textContent = path.length
+    ? `连击 ${preview.kills}，本轮生成 ${preview.rewardCount} 颗宝石`
+    : '';
   tutorialView = tutorial.view(
     store.data,
     path,
@@ -245,18 +318,18 @@ function render(): void {
     inspectedEntityId,
     tutorial: tutorialView,
   });
-  let hint = '点击或拖动连接同色方块；点击无法接入路线的愤怒方块查看范围。';
-  if (run.exitUnlocked) hint = '出口已打开。连到顶部入口，再拖向「↑ 出口」。';
+  let hint = '点击或拖动连接同种水果；点击无法接入路线的危险水果查看范围。';
+  if (run.exitUnlocked) hint = '出口已打开。连到顶部入口，再拖向门内。';
   if (path.length && preview.valid)
     hint = preview.exits
       ? '这条路线将安全撤离，随身宝石计入库存。'
       : preview.damage >= run.player.hp
         ? '这条路线会耗尽生命，随身宝石将全部失去。'
         : preview.damage
-          ? `终点会受到 ${preview.attackers.length} 只小怪攻击。可以回退，重新规划。`
+          ? `终点会受到 ${preview.attackers.length} 个危险水果攻击。可以回退，重新规划。`
           : preview.rewardValue
             ? '长链将生成宝石。记得在之后的路线中拾取它。'
-            : '路线已保留。继续点击或拖动选线、右键回退，或点击执行。';
+            : '路线已保留。继续点击或拖动选线、右键回退，或按 GO。';
   if (
     !path.length &&
     run.status === 'playing' &&
@@ -266,11 +339,12 @@ function render(): void {
   if (run.status === 'escaped') hint = '随身宝石已入库，当前生命已保存。';
   if (run.status === 'dead') hint = '本关行动结束，宝石库存和已通关记录保留。';
   if (inspectedEntityId)
-    hint = '红色方框是这只小怪的攻击范围。点击其他位置关闭。';
+    hint = '红色方框是这个危险水果的攻击范围。点击其他位置关闭。';
   $('hint').textContent = inspectedEntityId ? hint : message || hint;
   $('hint').classList.toggle('danger-text', preview.damage > 0);
-  $('notice').hidden = !store.notice;
-  $('notice').textContent = store.notice;
+  const notice = store.notice || assetError;
+  $('notice').hidden = !notice;
+  $('notice').textContent = notice;
   renderResult();
   updateControls();
 }
@@ -283,12 +357,12 @@ function renderResult(): void {
   const next =
     LEVELS[LEVELS.findIndex((level) => level.id === run.levelId) + 1];
   if (run.status === 'escaped') {
-    result.innerHTML = `<div class="result-card"><span class="result-symbol">◇</span><span class="eyebrow">${next ? '关卡完成' : '两关已完成'}</span><h2>安全撤离</h2><p>${run.killCount} 次击杀 · ${run.carriedGems} 宝石已入库</p><p class="result-note">剩余 ${run.player.hp} 点生命会带入下一次行动。</p>${next ? '<button id="next-level" class="primary">进入第二关 →</button>' : '<button id="choose-level" class="primary">选择关卡 →</button>'}<button id="replay-level" class="text-button">再玩这一关</button></div>`;
+    result.innerHTML = `<div class="result-card"><span class="result-symbol">${icons.gems}</span><span class="eyebrow">${next ? '关卡完成' : '两关已完成'}</span><h2>安全撤离</h2><p>切开 ${run.killCount} 个水果 · ${run.carriedGems} 宝石已入库</p><p class="result-note">剩余 ${run.player.hp} 点生命会带入下一次行动。</p>${next ? '<button id="next-level" class="primary">进入第二关 →</button>' : '<button id="choose-level" class="primary">选择关卡 →</button>'}<button id="replay-level" class="text-button">再玩这一关</button></div>`;
     if (next) $('next-level').onclick = () => beginLevel(next.id);
     else $('choose-level').onclick = openMenu;
     $('replay-level').onclick = () => beginLevel(run.levelId);
   } else {
-    result.innerHTML = `<div class="result-card"><span class="result-symbol failure">×</span><span class="eyebrow">行动结束</span><h2>生命已耗尽</h2><p>本关随身宝石已失去，库存宝石保留。</p><p class="result-note">本版尚未开放宝石回血。可在菜单重置整个存档，重新体验。</p><button id="death-menu" class="primary">打开菜单</button></div>`;
+    result.innerHTML = `<div class="result-card"><span class="result-symbol failure">${icons.close}</span><span class="eyebrow">行动结束</span><h2>生命已耗尽</h2><p>本关随身宝石已失去，库存宝石保留。</p><p class="result-note">本版尚未开放宝石回血。可在菜单重置整个存档，重新体验。</p><button id="death-menu" class="primary">打开菜单</button></div>`;
     $('death-menu').onclick = openMenu;
   }
 }
@@ -296,6 +370,7 @@ function renderResult(): void {
 async function commit(): Promise<void> {
   if (
     busy ||
+    !renderer.assetsReady ||
     input.isDragging() ||
     dialog.open ||
     !path.length ||
@@ -303,6 +378,7 @@ async function commit(): Promise<void> {
   )
     return;
   inspectEntity(null);
+  cancelScheduledRender();
   const before = store.data.run;
   const acceptedPath = [...path];
   let committed = false;
@@ -330,7 +406,7 @@ async function commit(): Promise<void> {
     );
     message =
       result.data.run.player.hp < before.player.hp
-        ? `受到了 ${before.player.hp - result.data.run.player.hp} 点伤害。注意愤怒小怪的十字攻击范围。`
+        ? `受到了 ${before.player.hp - result.data.run.player.hp} 点伤害。注意危险水果的十字攻击范围。`
         : '';
   } catch {
     presenter.finishImmediately();
@@ -409,7 +485,7 @@ function openHelp(): void {
   if (busy) return;
   openDialog(
     '每一步，都可以想清楚',
-    `<div class="help-content"><p><b>规划</b>：点击方块，或按住鼠标左键、单指拖动，从 P 连接八方向相邻的同色方块。路线可以交叉，但不能重复连接同一个目标。松开只保留路线，不会执行。</p><p><b>修改</b>：点击或回拖到之前已选的方块会截短路线；点击或拖回 P 清空。松手后按右键、Backspace 或 Delete 退一步。无效颜色不影响已有路线。</p><p><b>行动</b>：点击「执行路线」，或让棋盘获得焦点后按 Enter / 空格。主角停在路线终点，已选小怪被消除，空位掉落补充。</p><p><b>宝石</b>：一条路线击杀 10 / 15 / 20 / 25 只小怪，分别生成价值 1 / 2 / 3 / 5 的宝石。宝石留在棋盘；经过它才能收集，并允许下一段改换颜色。</p><p><b>危险</b>：点击带红色 ! 的小怪时，能接入当前路线就优先连线，不显示攻击范围；无法接入时，用闪烁红框查看它上下左右四格的攻击范围。已选节点仍按路线回退规则处理。一次只查看一只，点击其他位置关闭。只要本轮没有杀掉它，停在其攻击范围内就会扣血；多只攻击会叠加。新变愤怒的小怪到下一轮才会攻击。</p><p><b>撤离</b>：达标只打开出口。必须在之后的路线中连到顶部入口，再连出口，才能带走宝石。倒下会失去本关随身宝石。</p><p><b>生命</b>：换关、重试和刷新都不回血。宝石购买回血、装备与能力升级尚未开放。全新存档从 3 点生命开始。</p><div class="legend"><span class="blue">● 蓝色</span><span class="green">+ 绿色</span><span class="purple">▲ 紫色</span><span>${icons.gems} 宝石</span></div></div>`,
+    `<div class="help-content"><p><b>规划</b>：点击水果，或按住鼠标左键、单指拖动，从武士连接八方向相邻的同种水果。路线可以交叉，但不能重复连接同一个目标。松开只保留路线，不会执行。</p><p><b>修改</b>：点击或回拖到之前已选的水果会截短路线；点击或拖回武士清空。松手后按右键、Backspace 或 Delete 退一步。不同种类的水果不影响已有路线。</p><p><b>行动</b>：按「GO」，或让棋盘获得焦点后按 Enter / 空格。主角停在路线终点，已选水果被切开，空位掉落补充。</p><p><b>宝石</b>：一条路线切开 10 / 15 / 20 / 25 个水果，分别生成价值 1 / 2 / 3 / 5 的宝石。宝石留在棋盘；经过它才能收集，并允许下一段切换水果种类。</p><p><b>危险</b>：点击带红色 ! 的危险水果时，能接入当前路线就优先连线，不显示攻击范围；无法接入时，用闪烁红框查看它上下左右四格的攻击范围。已选节点仍按路线回退规则处理。一次只查看一个，点击其他位置关闭。只要本轮没有切开它，停在其攻击范围内就会扣血；多个攻击会叠加。新变危险的水果到下一轮才会攻击。</p><p><b>撤离</b>：达标只打开出口。必须在之后的路线中连到顶部入口，再连出口，才能带走宝石。倒下会失去本关随身宝石。</p><p><b>生命</b>：换关、重试和刷新都不回血。宝石购买回血、装备与能力升级尚未开放。全新存档从 3 点生命开始。</p><div class="legend"><span>橙子</span><span>梨</span><span>黑莓</span><span>${icons.gems} 宝石</span></div></div>`,
   );
 }
 
@@ -433,7 +509,7 @@ function openTutorial(): void {
     }
     openDialog(
       '新手引导',
-      `<p class="dialog-copy">可以在当前棋盘继续学习，也可以回到第一关开场，从同色连线开始。</p><div class="dialog-actions"><button id="tutorial-resume" class="primary">继续当前引导</button><button id="tutorial-from-start" class="secondary">从头学习</button></div>`,
+      `<p class="dialog-copy">可以在当前棋盘继续学习，也可以回到第一关开场，从连接同种水果开始。</p><div class="dialog-actions"><button id="tutorial-resume" class="primary">继续当前引导</button><button id="tutorial-from-start" class="secondary">从头学习</button></div>`,
     );
     $('tutorial-resume').onclick = resumeGuide;
     $('tutorial-from-start').onclick = () =>
@@ -461,7 +537,7 @@ function openMenu(): void {
     `<div class="menu-summary"><span>生命 ${profile.health} / 3</span><span>宝石库存 ${profile.bankedGems}</span></div><div class="level-list">${LEVELS.map(
       (level, index) => {
         const unlocked = isLevelUnlocked(store.data, level.id);
-        return `<button data-level="${level.id}" class="level-option" ${!unlocked || profile.health === 0 ? 'disabled' : ''}><span class="level-option-number">0${index + 1}</span><span><b>${level.name}</b><small>${level.height} 行 × ${level.width} 列 · 击杀 ${level.goal} 只${profile.clearedLevelIds.includes(level.id) ? ' · 已通关' : ''}</small></span><span>${unlocked ? '↗' : '锁定'}</span></button>`;
+        return `<button data-level="${level.id}" class="level-option" ${!unlocked || profile.health === 0 ? 'disabled' : ''}><span class="level-option-number">0${index + 1}</span><span><b>${level.name}</b><small>${level.height} 行 × ${level.width} 列 · 切开 ${level.goal} 个水果${profile.clearedLevelIds.includes(level.id) ? ' · 已通关' : ''}</small></span><span>${unlocked ? icons.execute : icons.lock}</span></button>`;
       },
     ).join(
       '',
@@ -489,7 +565,7 @@ function openMenu(): void {
     );
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'chain-game-save.json';
+    link.download = '连刃物语-存档.json';
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -507,7 +583,24 @@ function openMenu(): void {
     );
 }
 
-$('execute').onclick = () => void commit();
+executeButton.addEventListener('pointerdown', (event) => {
+  if (
+    event.button !== 0 ||
+    event.isPrimary === false ||
+    event.defaultPrevented ||
+    executeButton.disabled ||
+    input.isDragging()
+  )
+    return;
+  // A fresh press after drawing commits immediately, without waiting for click.
+  event.preventDefault();
+  void commit();
+});
+executeButton.addEventListener('click', (event) => {
+  // Pointer activation was already handled on press. Keep native keyboard and
+  // assistive-technology clicks without submitting the same route twice.
+  if (event.detail === 0) void commit();
+});
 $('menu-button').onclick = openMenu;
 $('help-button').onclick = openHelp;
 $('close-dialog').onclick = closeDialog;
@@ -542,9 +635,20 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     inspectEntity(null);
     presenter.finishImmediately();
+    audio.stop();
   }
 });
 window.addEventListener('blur', () => inspectEntity(null));
-window.addEventListener('pagehide', () => presenter.finishImmediately());
+window.addEventListener('pagehide', () => {
+  presenter.finishImmediately();
+  audio.stop();
+});
 render();
+void renderer.ready.then(
+  () => render(),
+  (error: unknown) => {
+    assetError = error instanceof Error ? error.message : '素材加载失败，请刷新重试。';
+    render();
+  },
+);
 void registerOfflineSupport();

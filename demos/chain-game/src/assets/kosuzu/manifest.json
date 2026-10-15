@@ -1,0 +1,577 @@
+{
+  "image": "kosuzu.png",
+  "size": [
+    512,
+    512
+  ],
+  "sourceFacing": "right",
+  "referenceHeight": 38,
+  "groundOffsetCells": 0.34,
+  "timingSource": "reference/idle.gif, run.gif, melee.gif, slam.gif, hurt.gif provide pose order; gameplay timings are annotated separately (run at 2x speed, first melee swing only, all eight slam PNG poses in 200ms)",
+  "clips": {
+    "idle": {
+      "frames": [
+        {
+          "sources": [
+            "source/idle/idle1.png"
+          ],
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 150
+        },
+        {
+          "sources": [
+            "source/idle/idle2.png"
+          ],
+          "rect": {
+            "x": 36,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 150
+        },
+        {
+          "sources": [
+            "source/idle/idle3.png"
+          ],
+          "rect": {
+            "x": 70,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 150
+        },
+        {
+          "sources": [
+            "source/idle/idle4.png"
+          ],
+          "rect": {
+            "x": 104,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 150
+        },
+        {
+          "sources": [
+            "source/idle/idle5.png"
+          ],
+          "rect": {
+            "x": 138,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 150
+        },
+        {
+          "sources": [
+            "source/idle/idle6.png"
+          ],
+          "rect": {
+            "x": 172,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 150
+        }
+      ],
+      "durationMs": 900,
+      "loop": true
+    },
+    "run": {
+      "frames": [
+        {
+          "sources": [
+            "source/run/run1.png"
+          ],
+          "rect": {
+            "x": 206,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 50
+        },
+        {
+          "sources": [
+            "source/run/run2.png"
+          ],
+          "rect": {
+            "x": 240,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 60
+        },
+        {
+          "sources": [
+            "source/run/run3.png"
+          ],
+          "rect": {
+            "x": 274,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 50
+        },
+        {
+          "sources": [
+            "source/run/run4.png"
+          ],
+          "rect": {
+            "x": 308,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 50
+        },
+        {
+          "sources": [
+            "source/run/run5.png"
+          ],
+          "rect": {
+            "x": 342,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 50
+        },
+        {
+          "sources": [
+            "source/run/run6.png"
+          ],
+          "rect": {
+            "x": 376,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 60
+        },
+        {
+          "sources": [
+            "source/run/run7.png"
+          ],
+          "rect": {
+            "x": 410,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 50
+        },
+        {
+          "sources": [
+            "source/run/run8.png"
+          ],
+          "rect": {
+            "x": 444,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 50
+        }
+      ],
+      "durationMs": 420,
+      "loop": true
+    },
+    "attack": {
+      "frames": [
+        {
+          "sources": [
+            "source/melee/melee_char1.png",
+            "source/melee/melee_fx1.png"
+          ],
+          "rect": {
+            "x": 2,
+            "y": 68,
+            "width": 96,
+            "height": 64
+          },
+          "origin": {
+            "x": 48,
+            "y": 64
+          },
+          "durationMs": 32
+        },
+        {
+          "sources": [
+            "source/melee/melee_char2.png",
+            "source/melee/melee_fx2.png"
+          ],
+          "rect": {
+            "x": 100,
+            "y": 68,
+            "width": 96,
+            "height": 64
+          },
+          "origin": {
+            "x": 48,
+            "y": 64
+          },
+          "durationMs": 44
+        },
+        {
+          "sources": [
+            "source/melee/melee_char3.png",
+            "source/melee/melee_fx3.png"
+          ],
+          "rect": {
+            "x": 198,
+            "y": 68,
+            "width": 96,
+            "height": 64
+          },
+          "origin": {
+            "x": 48,
+            "y": 64
+          },
+          "durationMs": 40
+        },
+        {
+          "sources": [
+            "source/melee/melee_char4.png",
+            "source/melee/melee_fx4.png"
+          ],
+          "rect": {
+            "x": 296,
+            "y": 68,
+            "width": 96,
+            "height": 64
+          },
+          "origin": {
+            "x": 48,
+            "y": 64
+          },
+          "durationMs": 30
+        },
+        {
+          "sources": [
+            "source/melee/melee_char5.png",
+            "source/melee/melee_fx5.png"
+          ],
+          "rect": {
+            "x": 394,
+            "y": 68,
+            "width": 96,
+            "height": 64
+          },
+          "origin": {
+            "x": 48,
+            "y": 64
+          },
+          "durationMs": 34
+        }
+      ],
+      "durationMs": 180,
+      "loop": false,
+      "contactMs": 32,
+      "contactFrame": 1,
+      "contactPoint": {
+        "x": 76,
+        "y": 49
+      }
+    },
+    "slam": {
+      "frames": [
+        {
+          "sources": [
+            "source/slam/slam_char1.png",
+            "source/slam/slam_fx1.png"
+          ],
+          "rect": {
+            "x": 2,
+            "y": 134,
+            "width": 128,
+            "height": 64
+          },
+          "origin": {
+            "x": 64,
+            "y": 64
+          },
+          "durationMs": 16
+        },
+        {
+          "sources": [
+            "source/slam/slam_char2.png",
+            "source/slam/slam_fx2.png"
+          ],
+          "rect": {
+            "x": 132,
+            "y": 134,
+            "width": 128,
+            "height": 64
+          },
+          "origin": {
+            "x": 64,
+            "y": 64
+          },
+          "durationMs": 24
+        },
+        {
+          "sources": [
+            "source/slam/slam_char3.png",
+            "source/slam/slam_fx3.png"
+          ],
+          "rect": {
+            "x": 262,
+            "y": 134,
+            "width": 128,
+            "height": 64
+          },
+          "origin": {
+            "x": 64,
+            "y": 64
+          },
+          "durationMs": 34
+        },
+        {
+          "sources": [
+            "source/slam/slam_char4.png",
+            "source/slam/slam_fx4.png"
+          ],
+          "rect": {
+            "x": 2,
+            "y": 200,
+            "width": 128,
+            "height": 64
+          },
+          "origin": {
+            "x": 64,
+            "y": 64
+          },
+          "durationMs": 30
+        },
+        {
+          "sources": [
+            "source/slam/slam_char5.png",
+            "source/slam/slam_fx5.png"
+          ],
+          "rect": {
+            "x": 132,
+            "y": 200,
+            "width": 128,
+            "height": 64
+          },
+          "origin": {
+            "x": 64,
+            "y": 64
+          },
+          "durationMs": 24
+        },
+        {
+          "sources": [
+            "source/slam/slam_char6.png",
+            "source/slam/slam_fx6.png"
+          ],
+          "rect": {
+            "x": 262,
+            "y": 200,
+            "width": 128,
+            "height": 64
+          },
+          "origin": {
+            "x": 64,
+            "y": 64
+          },
+          "durationMs": 26
+        },
+        {
+          "sources": [
+            "source/slam/slam_char7.png",
+            "source/slam/slam_fx7.png"
+          ],
+          "rect": {
+            "x": 2,
+            "y": 266,
+            "width": 128,
+            "height": 64
+          },
+          "origin": {
+            "x": 64,
+            "y": 64
+          },
+          "durationMs": 22
+        },
+        {
+          "sources": [
+            "source/slam/slam_char8.png",
+            "source/slam/slam_fx8.png"
+          ],
+          "rect": {
+            "x": 132,
+            "y": 266,
+            "width": 128,
+            "height": 64
+          },
+          "origin": {
+            "x": 64,
+            "y": 64
+          },
+          "durationMs": 24
+        }
+      ],
+      "durationMs": 200,
+      "loop": false,
+      "contactMs": 40,
+      "contactFrame": 2,
+      "contactPoint": {
+        "x": 92,
+        "y": 36
+      },
+      "cutAngleRad": 1.5707963267948966
+    },
+    "hurt": {
+      "frames": [
+        {
+          "sources": [
+            "reference/hurt.gif#1"
+          ],
+          "rect": {
+            "x": 262,
+            "y": 266,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 150
+        },
+        {
+          "sources": [
+            "reference/hurt.gif#2"
+          ],
+          "rect": {
+            "x": 296,
+            "y": 266,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 150
+        }
+      ],
+      "durationMs": 300,
+      "loop": false
+    },
+    "start": {
+      "frames": [
+        {
+          "sources": [
+            "source/run/run1.png"
+          ],
+          "rect": {
+            "x": 206,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 0
+        }
+      ],
+      "durationMs": 0,
+      "loop": false
+    },
+    "stop": {
+      "frames": [
+        {
+          "sources": [
+            "source/idle/idle1.png"
+          ],
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "width": 32,
+            "height": 64
+          },
+          "origin": {
+            "x": 16,
+            "y": 64
+          },
+          "durationMs": 0
+        }
+      ],
+      "durationMs": 0,
+      "loop": false
+    }
+  }
+}

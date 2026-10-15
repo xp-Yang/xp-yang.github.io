@@ -55,7 +55,7 @@ for (const file of gravityAssets.files) {
 }
 const chainBase = '/games/chain-game/';
 references.add('/works/chain-game/index.html');
-references.add('/images/chain-game.svg');
+references.add('/images/chain-game-cover.png');
 references.add(chainBase + 'asset-manifest.json');
 const chainAssets = JSON.parse(
   await readFile(join(root, chainBase.slice(1), 'asset-manifest.json'), 'utf8'),

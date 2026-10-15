@@ -1,19 +1,22 @@
 import {
   attackCells,
   getLevel,
-  type ColorId,
   type Entity,
   type Point,
 } from '../core';
 import type { BoardView, GameRenderer } from './contracts';
-import { drawGemCluster } from './gem-visual';
+import { GemVisual } from './gem-visual';
+import { FruitVisual } from './fruit-visual';
+import { GateVisual } from './gate-visual';
+import {
+  BOARD_SIDE_PADDING_CELLS,
+  BOARD_TOP_CELLS,
+  boardAspectRatio,
+  exitGateBounds,
+} from './board-geometry';
 import { MOTION_TIMING, type MotionFrame, type EntityMotion } from './motion';
-
-const COLORS: Record<ColorId, string> = {
-  blue: '#75bee6',
-  green: '#b7ce82',
-  purple: '#b9a0db',
-};
+import { SamuraiVisual } from './samurai-visual';
+import type { SamuraiFacing, SamuraiPose } from './samurai-sprites';
 
 export class CanvasRenderer implements GameRenderer {
   private view: BoardView | null = null;
@@ -24,6 +27,34 @@ export class CanvasRenderer implements GameRenderer {
   private top = 0;
   private width = 0;
   private height = 0;
+  private pixelRatio = 1;
+  private facing: SamuraiFacing = 'right';
+  private idleStartedAt = performance.now();
+  private trailCapturedAt = 0;
+  private readonly samurai = new SamuraiVisual();
+  private readonly fruits = new FruitVisual();
+  private readonly gems = new GemVisual();
+  private readonly gate = new GateVisual();
+  private fontReady = false;
+  private spriteTrail: {
+    pos: Point;
+    sprite: SamuraiPose;
+    capturedAt: number;
+  }[] = [];
+  readonly ready = Promise.all([
+    this.samurai.ready,
+    this.fruits.ready,
+    this.gems.ready,
+    this.gate.ready,
+    document.fonts.load('12px "ChainPixel"').then(
+      () => {
+        this.fontReady = true;
+      },
+      () => {
+        throw new Error('像素字体加载失败，请刷新重试。');
+      },
+    ),
+  ]).then(() => this.paint());
   private inspectedThreatCells: readonly Point[] = [];
   private frameRequest = 0;
   private disposed = false;
@@ -54,6 +85,17 @@ export class CanvasRenderer implements GameRenderer {
     );
   }
 
+  get assetsReady(): boolean {
+    return (
+      this.samurai.loaded && this.fruits.loaded &&
+      this.gems.loaded && this.gate.loaded && this.fontReady
+    );
+  }
+
+  get playerFacing(): SamuraiFacing {
+    return this.facing;
+  }
+
   render(view: BoardView): void {
     this.view = view;
     const inspected = view.inspectedEntityId
@@ -67,7 +109,9 @@ export class CanvasRenderer implements GameRenderer {
           })
         : [];
     const level = getLevel(view.state.levelId);
-    this.canvas.style.aspectRatio = `${level.width + 0.5} / ${level.height + 1.25}`;
+    this.canvas.style.aspectRatio = String(
+      boardAspectRatio(level.width, level.height),
+    );
     const position =
       view.state.status === 'escaped'
         ? '已从出口撤离。'
@@ -81,6 +125,28 @@ export class CanvasRenderer implements GameRenderer {
 
   /** Visual frames never replace the authoritative rules state or hit-test data. */
   setAnimation(frame: MotionFrame | null): void {
+    const now = performance.now();
+    const previous = this.motion;
+    if (
+      frame?.phase === 'route' &&
+      previous?.phase === 'route' &&
+      frame.routeProgress > previous.routeProgress &&
+      !this.reducedMotion.matches
+    ) {
+      if (now - this.trailCapturedAt >= 38) {
+        this.spriteTrail.push({
+          pos: previous.player.pos,
+          sprite: previous.player.sprite,
+          capturedAt: now,
+        });
+        this.trailCapturedAt = now;
+      }
+      this.spriteTrail = this.spriteTrail
+        .filter((sample) => now - sample.capturedAt < 155)
+        .slice(-4);
+    } else this.spriteTrail = [];
+    if (frame) this.facing = frame.player.sprite.facing;
+    else this.idleStartedAt = now;
     this.motion = frame;
     this.stopLoop();
     this.paint();
@@ -90,6 +156,7 @@ export class CanvasRenderer implements GameRenderer {
     if (!this.view || this.disposed) return;
     const rect = this.canvas.getBoundingClientRect();
     const ratio = Math.min(window.devicePixelRatio || 1, 3);
+    this.pixelRatio = ratio;
     const width = Math.round(rect.width * ratio),
       height = Math.round(rect.height * ratio);
     if (this.canvas.width !== width || this.canvas.height !== height) {
@@ -99,10 +166,11 @@ export class CanvasRenderer implements GameRenderer {
     this.width = rect.width;
     this.height = rect.height;
     this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    this.ctx.imageSmoothingEnabled = false;
     const level = getLevel(this.view.state.levelId);
-    this.cell = rect.width / (level.width + 0.5);
-    this.left = this.cell * 0.25;
-    this.top = this.cell;
+    this.cell = rect.width / (level.width + BOARD_SIDE_PADDING_CELLS * 2);
+    this.left = this.cell * BOARD_SIDE_PADDING_CELLS;
+    this.top = this.cell * BOARD_TOP_CELLS;
     this.paint();
   }
 
@@ -120,10 +188,10 @@ export class CanvasRenderer implements GameRenderer {
       y = clientY - rect.top;
     const { state } = this.view;
     const level = getLevel(state.levelId);
-    const gate = this.center(level.exit.pos);
+    const gate = exitGateBounds(this.center(level.exit.pos), this.cell);
     if (
-      Math.abs(x - gate.x) < this.cell * 0.65 &&
-      Math.abs(y - gate.y) < this.cell * 0.28
+      x >= gate.x && x <= gate.x + gate.width &&
+      y >= gate.y && y <= gate.y + gate.height
     )
       return 'exit';
     const pos = {
@@ -158,7 +226,8 @@ export class CanvasRenderer implements GameRenderer {
     // Turn playback owns its clock; idle guidance shares the preview clock.
     if (
       !this.motion &&
-      (this.view.path.length ||
+      ((this.samurai.loaded && this.view.state.status === 'playing') ||
+        this.view.path.length ||
         this.inspectedThreatCells.length ||
         this.view.tutorial?.cells.length ||
         this.view.tutorial?.route.length) &&
@@ -177,19 +246,18 @@ export class CanvasRenderer implements GameRenderer {
     y: number,
     w: number,
     h: number,
-    radius: number,
     fill: string,
     stroke?: string,
     lineWidth = 1,
   ): void {
     const ctx = this.ctx;
     ctx.beginPath();
-    ctx.roundRect(x, y, w, h, radius);
+    ctx.rect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
     ctx.fillStyle = fill;
     ctx.fill();
     if (stroke) {
       ctx.strokeStyle = stroke;
-      ctx.lineWidth = lineWidth;
+      ctx.lineWidth = Math.max(2, Math.round(lineWidth / 2) * 2);
       ctx.stroke();
     }
   }
@@ -199,14 +267,29 @@ export class CanvasRenderer implements GameRenderer {
     point: Point,
     size: number,
     color: string,
-    weight = '600',
   ): void {
     const ctx = this.ctx;
     ctx.fillStyle = color;
-    ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+    const fontSize = Math.max(12, Math.round(size / 12) * 12);
+    ctx.font = `${fontSize}px "ChainPixel", monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, point.x, point.y);
+    ctx.fillText(text, Math.round(point.x), Math.round(point.y));
+  }
+
+  private corners(x: number, y: number, size: number, color: string): void {
+    const ctx = this.ctx;
+    const edge = Math.round(size / 2);
+    const unit = Math.max(1, Math.round(this.cell / 40));
+    const length = Math.max(unit * 3, Math.round(size * 0.2));
+    ctx.fillStyle = color;
+    for (const dx of [-edge, edge - unit])
+      for (const dy of [-edge, edge - unit]) {
+        const left = dx < 0 ? dx : dx - length + unit;
+        const top = dy < 0 ? dy : dy - length + unit;
+        ctx.fillRect(Math.round(x + left), Math.round(y + dy), length, unit);
+        ctx.fillRect(Math.round(x + dx), Math.round(y + top), unit, length);
+      }
   }
 
   private withEntity(
@@ -240,42 +323,25 @@ export class CanvasRenderer implements GameRenderer {
   private drawEntityBody(entity: Entity, selected: boolean): void {
     const c = this.cell;
     if (entity.kind === 'creep') {
-      this.rect(
-        -c * 0.4,
-        -c * 0.4,
-        c * 0.8,
-        c * 0.8,
-        c * 0.14,
-        COLORS[entity.color],
-        selected ? '#f3f8d7' : entity.mood === 'angry' ? '#ff725a' : undefined,
-        selected ? 3 : 2.5,
-      );
-    } else drawGemCluster(this.ctx, c, entity.value, selected);
+      this.fruits.draw(this.ctx, entity.color, c);
+      if (selected || entity.mood === 'angry') {
+        this.corners(0, 0, c * 0.8, selected ? '#e5f1d5' : '#f0837c');
+      }
+    } else this.gems.drawCluster(this.ctx, c, entity.value, selected);
   }
 
   private drawEntityLabel(entity: Entity, index: number): void {
-    const ctx = this.ctx,
-      c = this.cell;
+    const c = this.cell;
     if (index >= 0) {
-      ctx.beginPath();
-      ctx.arc(0, 0, c * 0.15, 0, Math.PI * 2);
-      ctx.fillStyle = '#173331';
-      ctx.fill();
+      const size = Math.max(16, Math.round(c * 0.3));
+      this.rect(-size / 2, -size / 2, size, size, '#17253a', '#8ba17a');
       this.label(String(index + 1), { x: 0, y: 0 }, c * 0.18, '#f5ffdf');
-    } else if (entity.kind === 'creep')
-      this.label(
-        entity.color === 'blue' ? '●' : entity.color === 'green' ? '+' : '▲',
-        { x: 0, y: 0 },
-        c * 0.22,
-        '#243d42b3',
-      );
+    }
     if (entity.kind === 'creep' && entity.mood === 'angry') {
       const p = { x: c * 0.27, y: -c * 0.26 };
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, c * 0.12, 0, Math.PI * 2);
-      ctx.fillStyle = '#9e2f24';
-      ctx.fill();
-      this.label('!', p, c * 0.17, '#fff0da', '800');
+      const size = Math.max(12, Math.round(c * 0.24));
+      this.rect(p.x - size / 2, p.y - size / 2, size, size, '#873f49', '#f09c87');
+      this.label('!', p, c * 0.17, '#fff0da');
     }
   }
 
@@ -338,8 +404,8 @@ export class CanvasRenderer implements GameRenderer {
         const p = this.center(segment.to);
         ctx.lineTo(p.x, p.y);
       }
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
     ctx.lineWidth = c * 0.11;
     ctx.strokeStyle = '#10272bbf';
     ctx.stroke();
@@ -379,8 +445,6 @@ export class CanvasRenderer implements GameRenderer {
     ctx.globalAlpha = this.reducedMotion.matches
       ? 1
       : 0.4 + 0.6 * (0.5 + 0.5 * Math.cos((time / 1100) * Math.PI * 2));
-    ctx.shadowColor = '#ff4e4966';
-    ctx.shadowBlur = c * 0.045;
     for (const pos of this.inspectedThreatCells) {
       const p = this.center(pos);
       this.rect(
@@ -388,7 +452,6 @@ export class CanvasRenderer implements GameRenderer {
         p.y - c * 0.43,
         c * 0.86,
         c * 0.86,
-        c * 0.06,
         '#ff4e4910',
         '#ff4e49',
         Math.max(2, c * 0.035),
@@ -406,16 +469,11 @@ export class CanvasRenderer implements GameRenderer {
       ? 1
       : 0.7 + 0.3 * Math.sin((time / 1600) * Math.PI * 2);
     ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
     for (const pos of guidance.cells) {
       const p = this.center(pos);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, c * 0.43, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255, 224, 146, ${pulse})`;
-      ctx.lineWidth = Math.max(2, c * 0.028);
-      ctx.setLineDash([c * 0.06, c * 0.055]);
-      ctx.stroke();
+      this.corners(p.x, p.y, c * 0.86, `rgba(255, 224, 146, ${pulse})`);
     }
     if (guidance.route.length > 1) {
       ctx.beginPath();
@@ -453,13 +511,8 @@ export class CanvasRenderer implements GameRenderer {
           x: from.x + (to.x - from.x) * progress,
           y: from.y + (to.y - from.y) * progress,
         });
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, c * 0.078, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffe092';
-        ctx.fill();
-        ctx.strokeStyle = '#26352d';
-        ctx.lineWidth = Math.max(1, c * 0.02);
-        ctx.stroke();
+        const size = Math.max(4, Math.round(c * 0.12));
+        this.rect(p.x - size / 2, p.y - size / 2, size, size, '#ffe092', '#26352d');
       }
     }
     ctx.restore();
@@ -474,36 +527,23 @@ export class CanvasRenderer implements GameRenderer {
       ctx = this.ctx,
       c = this.cell;
     ctx.clearRect(0, 0, this.width, this.height);
-    const gate = this.center(level.exit.pos);
-    this.rect(
-      gate.x - c * 0.67,
-      gate.y - c * 0.24,
-      c * 1.34,
-      c * 0.48,
-      c * 0.12,
-      state.exitUnlocked ? '#d1eb93' : '#293438',
-      state.exitUnlocked ? '#e4f6b4' : '#435054',
-    );
-    this.label(
-      state.exitUnlocked ? '↑ 出口' : '出口 · 锁定',
-      gate,
-      c * 0.17,
-      state.exitUnlocked ? '#1c3028' : '#98a8a8',
-    );
-    for (let y = 0; y < level.height; y++)
-      for (let x = 0; x < level.width; x++) {
-        const p = this.center({ x, y });
-        this.rect(
-          p.x - c * 0.45,
-          p.y - c * 0.45,
-          c * 0.9,
-          c * 0.9,
-          c * 0.14,
-          '#1b272a',
-          '#283638',
-        );
+    this.gate.draw(ctx, this.center(level.exit.pos), c, state.exitUnlocked);
+    const entities = Object.values(state.entities);
+    for (const entity of entities.filter((item) => item.kind === 'creep'))
+      this.withEntity(entity, motion?.entities[entity.id], () =>
+        this.drawEntityBody(entity, path.includes(entity.id)),
+      );
+    if (motion) {
+      for (const burst of motion.fruitBursts) {
+        const p = this.center(burst.entity.pos);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        this.fruits.drawBurst(ctx, burst.entity.color, c, burst);
+        ctx.restore();
       }
-    for (const entity of Object.values(state.entities))
+    }
+    // A falling gem stays in front of the pieces it just crushed.
+    for (const entity of entities.filter((item) => item.kind === 'gem'))
       this.withEntity(entity, motion?.entities[entity.id], () =>
         this.drawEntityBody(entity, path.includes(entity.id)),
       );
@@ -514,11 +554,18 @@ export class CanvasRenderer implements GameRenderer {
         .filter((pos): pos is Point => Boolean(pos)),
     ];
     this.drawRoute(route, time, motion?.routeProgress ?? 0);
-    for (const entity of Object.values(state.entities))
+    for (const entity of entities)
       this.withEntity(entity, motion?.entities[entity.id], () =>
         this.drawEntityLabel(entity, path.indexOf(entity.id)),
       );
     if (motion) {
+      for (const cut of motion.fruitCuts) {
+        const p = this.center(cut.entity.pos);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        this.fruits.drawCut(ctx, cut.entity.color, c, cut);
+        ctx.restore();
+      }
       for (const impact of motion.impacts) {
         const p = this.center(impact.pos);
         ctx.save();
@@ -526,7 +573,10 @@ export class CanvasRenderer implements GameRenderer {
         ctx.strokeStyle = impact.color;
         ctx.lineWidth = c * 0.055;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, impact.radius * c, 0, Math.PI * 2);
+        ctx.rect(
+          p.x - impact.radius * c, p.y - impact.radius * c,
+          impact.radius * c * 2, impact.radius * c * 2,
+        );
         ctx.stroke();
         ctx.restore();
       }
@@ -542,48 +592,43 @@ export class CanvasRenderer implements GameRenderer {
           -size / 2,
           size,
           size,
-          size * 0.13,
           particle.color,
         );
         ctx.restore();
       }
-      if (motion.playerTrail.length > 1) {
-        ctx.save();
-        ctx.beginPath();
-        motion.playerTrail.forEach((point, index) => {
-          const p = this.center(point);
-          if (index === 0) ctx.moveTo(p.x, p.y);
-          else ctx.lineTo(p.x, p.y);
-        });
-        ctx.strokeStyle = '#e8ffbc36';
-        ctx.lineWidth = c * 0.38;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-        ctx.restore();
+      for (const sample of this.spriteTrail) {
+        const alpha = 0.15 * Math.max(0, 1 - (time - sample.capturedAt) / 155);
+        this.samurai.draw(
+          ctx,
+          this.center(sample.pos),
+          c,
+          this.pixelRatio,
+          sample.sprite,
+          alpha,
+        );
       }
     }
     if (motion ? motion.player.alpha > 0 : state.status !== 'escaped') {
       const p = this.center(motion?.player.pos ?? state.player.pos);
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.scale(motion?.player.scaleX ?? 1, motion?.player.scaleY ?? 1);
-      ctx.globalAlpha = motion?.player.alpha ?? 1;
-      ctx.beginPath();
-      ctx.arc(0, 0, c * 0.32, 0, Math.PI * 2);
-      ctx.fillStyle = '#edf4df';
-      ctx.fill();
-      ctx.strokeStyle = '#b9d892';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      this.label('P', { x: 0, y: 0 }, c * 0.29, '#1c3932', '800');
-      ctx.restore();
+      const sprite: SamuraiPose = motion?.player.sprite ?? {
+        clip: 'idle',
+        elapsedMs: this.reducedMotion.matches ? 0 : time - this.idleStartedAt,
+        facing: this.facing,
+      };
+      this.samurai.draw(
+        ctx,
+        p,
+        c,
+        this.pixelRatio,
+        sprite,
+        motion?.player.alpha ?? 1,
+      );
     }
     if (!motion && view.preview.valid && path.length && !view.preview.exits) {
       const p = this.center(view.preview.endpoint);
       ctx.save();
       ctx.beginPath();
-      ctx.arc(p.x, p.y, c * 0.44, 0, Math.PI * 2);
+      ctx.rect(p.x - c * 0.44, p.y - c * 0.44, c * 0.88, c * 0.88);
       ctx.lineWidth = 2;
       ctx.strokeStyle = view.preview.damage ? '#ff654d' : '#f4ffdb';
       ctx.setLineDash([4, 4]);
@@ -604,6 +649,7 @@ export class CanvasRenderer implements GameRenderer {
     this.lifecycle.abort();
     this.view = null;
     this.motion = null;
+    this.spriteTrail = [];
     this.inspectedThreatCells = [];
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }

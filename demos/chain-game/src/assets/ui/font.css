@@ -1,0 +1,11 @@
+@font-face {
+  font-family: 'ChainPixel';
+  src: url('./fusion-pixel-12px-zh-hans.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  --font-pixel: 'ChainPixel', monospace;
+}

@@ -1,43 +1,40 @@
-/** Shared silhouette for the HUD and the replaceable board gem artwork. */
-export const GEM_ICON_PATH =
-  'm12 2 9 8-9 12L3 10zM3 10h18M12 2 8 10l4 12 4-12z';
+/** The HUD and board share the supplied pixel gem artwork. */
+export const GEM_ICON_URL = new URL('../assets/ui/gem.png', import.meta.url).href;
 
-interface GemPlacement {
+export interface GemPlacement {
   x: number;
   y: number;
-  width: number;
-  height: number;
-  angle: number;
+  size: number;
 }
 
 const CLUSTERS: Record<number, readonly GemPlacement[]> = {
-  1: [{ x: 0, y: 0, width: 0.52, height: 0.66, angle: 0 }],
+  1: [{ x: 0, y: 0, size: 0.58 }],
   2: [
-    { x: -0.15, y: -0.045, width: 0.35, height: 0.49, angle: -0.13 },
-    { x: 0.15, y: 0.055, width: 0.35, height: 0.49, angle: 0.13 },
+    { x: -0.17, y: -0.055, size: 0.44 },
+    { x: 0.17, y: 0.055, size: 0.44 },
   ],
   3: [
-    { x: 0, y: -0.16, width: 0.32, height: 0.41, angle: 0 },
-    { x: -0.18, y: 0.13, width: 0.33, height: 0.43, angle: -0.13 },
-    { x: 0.18, y: 0.13, width: 0.33, height: 0.43, angle: 0.13 },
+    { x: 0, y: -0.17, size: 0.4 },
+    { x: -0.19, y: 0.14, size: 0.4 },
+    { x: 0.19, y: 0.14, size: 0.4 },
   ],
   4: [
-    { x: -0.16, y: -0.17, width: 0.29, height: 0.34, angle: -0.1 },
-    { x: 0.16, y: -0.17, width: 0.29, height: 0.34, angle: 0.1 },
-    { x: -0.16, y: 0.16, width: 0.31, height: 0.36, angle: -0.12 },
-    { x: 0.16, y: 0.16, width: 0.31, height: 0.36, angle: 0.12 },
+    { x: -0.17, y: -0.17, size: 0.36 },
+    { x: 0.17, y: -0.17, size: 0.36 },
+    { x: -0.17, y: 0.17, size: 0.36 },
+    { x: 0.17, y: 0.17, size: 0.36 },
   ],
   5: [
-    { x: -0.13, y: -0.18, width: 0.27, height: 0.34, angle: -0.12 },
-    { x: 0.13, y: -0.18, width: 0.27, height: 0.34, angle: 0.12 },
-    { x: -0.235, y: 0.12, width: 0.23, height: 0.34, angle: -0.1 },
-    { x: 0.235, y: 0.12, width: 0.23, height: 0.34, angle: 0.1 },
-    { x: 0, y: 0.16, width: 0.28, height: 0.37, angle: 0 },
+    { x: -0.14, y: -0.19, size: 0.34 },
+    { x: 0.14, y: -0.19, size: 0.34 },
+    { x: -0.25, y: 0.13, size: 0.34 },
+    { x: 0.25, y: 0.13, size: 0.34 },
+    { x: 0, y: 0.17, size: 0.34 },
   ],
 };
 
-/** All coordinates stay within one cell; larger future values cap at nine gems. */
-function placements(value: number): readonly GemPlacement[] {
+/** Larger values form a pile with at most nine independently visible gems. */
+export function gemClusterPlacements(value: number): readonly GemPlacement[] {
   const count = Number.isFinite(value)
     ? Math.max(1, Math.min(9, Math.round(value)))
     : 1;
@@ -49,145 +46,81 @@ function placements(value: number): readonly GemPlacement[] {
     for (let column = 0; column < inRow; column++) {
       result.push({
         x: (column - (inRow - 1) / 2) * 0.25,
-        y: (row - (rows - 1) / 2) * (rows === 2 ? 0.33 : 0.24),
-        width: 0.23,
-        height: rows === 2 ? 0.34 : 0.24,
-        angle: (column - (inRow - 1) / 2) * 0.08,
+        y: (row - (rows - 1) / 2) * (rows === 2 ? 0.3 : 0.24),
+        size: 0.3,
       });
     }
   }
   return result;
 }
 
-function polygon(
-  ctx: CanvasRenderingContext2D,
-  points: readonly (readonly [number, number])[],
-  fill: string,
-): void {
-  ctx.beginPath();
-  points.forEach(([x, y], index) => {
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.closePath();
-  ctx.fillStyle = fill;
-  ctx.fill();
-}
-
-function drawGem(
-  ctx: CanvasRenderingContext2D,
-  cell: number,
-  gem: GemPlacement,
-  selected: boolean,
-): void {
-  ctx.save();
-  ctx.translate(gem.x * cell, gem.y * cell);
-  ctx.rotate(gem.angle);
-  ctx.scale((gem.width * cell) / 18, (gem.height * cell) / 20);
-  ctx.translate(-12, -12);
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-
-  // A dark rim separates overlapping stones without modifying animated alpha.
-  ctx.beginPath();
-  ctx.moveTo(12, 2);
-  ctx.lineTo(21, 10);
-  ctx.lineTo(12, 22);
-  ctx.lineTo(3, 10);
-  ctx.closePath();
-  ctx.fillStyle = '#f5cd61';
-  ctx.fill();
-  ctx.strokeStyle = '#16272a';
-  ctx.lineWidth = 2.9;
-  ctx.stroke();
-
-  polygon(
-    ctx,
-    [
-      [12, 2],
-      [3, 10],
-      [8, 10],
-    ],
-    '#ffeeb5',
-  );
-  polygon(
-    ctx,
-    [
-      [12, 2],
-      [8, 10],
-      [16, 10],
-    ],
-    '#ffdf78',
-  );
-  polygon(
-    ctx,
-    [
-      [12, 2],
-      [16, 10],
-      [21, 10],
-    ],
-    '#e5aa3b',
-  );
-  polygon(
-    ctx,
-    [
-      [3, 10],
-      [8, 10],
-      [12, 22],
-    ],
-    '#e5ac3f',
-  );
-  polygon(
-    ctx,
-    [
-      [8, 10],
-      [16, 10],
-      [12, 22],
-    ],
-    '#ffe08a',
-  );
-  polygon(
-    ctx,
-    [
-      [16, 10],
-      [21, 10],
-      [12, 22],
-    ],
-    '#b97b2d',
-  );
-
-  ctx.beginPath();
-  ctx.moveTo(3, 10);
-  ctx.lineTo(21, 10);
-  ctx.moveTo(12, 2);
-  ctx.lineTo(8, 10);
-  ctx.lineTo(12, 22);
-  ctx.lineTo(16, 10);
-  ctx.closePath();
-  ctx.strokeStyle = '#95642b';
-  ctx.lineWidth = 0.85;
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(12, 2);
-  ctx.lineTo(21, 10);
-  ctx.lineTo(12, 22);
-  ctx.lineTo(3, 10);
-  ctx.closePath();
-  ctx.strokeStyle = selected ? '#fff7d1' : '#ffdb72';
-  ctx.lineWidth = selected ? 1.45 : 1.1;
-  ctx.stroke();
-  ctx.restore();
-}
-
 /** Draw at the cell centre; the caller owns positioning and route numbering. */
-export function drawGemCluster(
-  ctx: CanvasRenderingContext2D,
-  cell: number,
-  value: number,
-  selected: boolean,
-): void {
-  ctx.save();
-  for (const gem of placements(value)) drawGem(ctx, cell, gem, selected);
-  ctx.restore();
+export class GemVisual {
+  private readonly image = new Image();
+  private available = false;
+  readonly ready: Promise<void>;
+
+  constructor() {
+    this.image.decoding = 'async';
+    this.ready = new Promise((resolve, reject) => {
+      this.image.onload = async () => {
+        try {
+          if (typeof this.image.decode === 'function') await this.image.decode();
+          this.available = true;
+          resolve();
+        } catch {
+          reject(new Error('宝石加载失败，请刷新重试。'));
+        }
+      };
+      this.image.onerror = () => reject(new Error('宝石加载失败，请刷新重试。'));
+      this.image.src = GEM_ICON_URL;
+    });
+  }
+
+  get loaded(): boolean {
+    return this.available;
+  }
+
+  drawCluster(
+    ctx: CanvasRenderingContext2D,
+    cell: number,
+    value: number,
+    selected: boolean,
+  ): void {
+    if (!this.available) return;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    const width = this.image.naturalWidth;
+    const height = this.image.naturalHeight;
+    for (const gem of gemClusterPlacements(value)) {
+      // Integer source-pixel scaling keeps small facets crisp and undistorted.
+      const scale = Math.max(1, Math.round((gem.size * cell) / Math.max(width, height)));
+      const drawWidth = width * scale;
+      const drawHeight = height * scale;
+      ctx.drawImage(
+        this.image,
+        Math.round(gem.x * cell - drawWidth / 2),
+        Math.round(gem.y * cell - drawHeight / 2),
+        drawWidth,
+        drawHeight,
+      );
+    }
+    if (selected) this.drawSelection(ctx, cell);
+    ctx.restore();
+  }
+
+  private drawSelection(ctx: CanvasRenderingContext2D, cell: number): void {
+    const edge = Math.round(cell * 0.43);
+    const thickness = Math.max(1, Math.round(cell / 40));
+    const length = Math.max(thickness * 3, Math.round(cell * 0.13));
+    ctx.fillStyle = '#f4fcff';
+    for (const x of [-edge, edge - thickness]) {
+      for (const y of [-edge, edge - thickness]) {
+        const left = x < 0 ? x : x - length + thickness;
+        const top = y < 0 ? y : y - length + thickness;
+        ctx.fillRect(left, y, length, thickness);
+        ctx.fillRect(x, top, thickness, length);
+      }
+    }
+  }
 }

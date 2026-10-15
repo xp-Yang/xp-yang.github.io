@@ -1,0 +1,78 @@
+{
+  "width": 64,
+  "height": 48,
+  "rects": {
+    "apple": {
+      "x": 0,
+      "y": 0,
+      "width": 16,
+      "height": 16
+    },
+    "banana": {
+      "x": 16,
+      "y": 0,
+      "width": 16,
+      "height": 16
+    },
+    "blackberry": {
+      "x": 32,
+      "y": 0,
+      "width": 16,
+      "height": 16
+    },
+    "cherry": {
+      "x": 48,
+      "y": 0,
+      "width": 16,
+      "height": 16
+    },
+    "coconut": {
+      "x": 0,
+      "y": 16,
+      "width": 16,
+      "height": 16
+    },
+    "lemon": {
+      "x": 16,
+      "y": 16,
+      "width": 16,
+      "height": 16
+    },
+    "mango": {
+      "x": 32,
+      "y": 16,
+      "width": 16,
+      "height": 16
+    },
+    "orange": {
+      "x": 48,
+      "y": 16,
+      "width": 16,
+      "height": 16
+    },
+    "pear": {
+      "x": 0,
+      "y": 32,
+      "width": 16,
+      "height": 16
+    },
+    "pineapple": {
+      "x": 16,
+      "y": 32,
+      "width": 16,
+      "height": 16
+    },
+    "strawberry": {
+      "x": 32,
+      "y": 32,
+      "width": 16,
+      "height": 16
+    },
+    "watermelon": {
+      "x": 48,
+      "y": 32,
+      "width": 16,
+      "height": 16
+    }
+  }
+}

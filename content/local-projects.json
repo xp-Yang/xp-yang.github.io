@@ -3,11 +3,11 @@
     "id": "project-chain-game",
     "slug": "chain-game",
     "type": "Project",
-    "title": "连锁矿境",
-    "summary": "连起同色方块，收集长链宝石，仔细选择每一步的终点。两个关卡，在鼠标与指尖下规划一条撤离之路。",
+    "title": "连刃物语",
+    "summary": "一笔连线，逐个斩击。规划同种水果的长链，收集宝石，在越来越快的连斩中寻找撤离之路。",
     "publishedAt": "2026-10-14",
     "tags": ["Game", "Canvas", "TypeScript"],
-    "cover": "/images/chain-game.svg",
+    "cover": "/images/chain-game-cover.png",
     "featured": true,
     "order": -2,
     "project": {
@@ -21,7 +21,7 @@
         "type": "paragraph",
         "spans": [
           {
-            "text": "回合制连线战斗原型。拖拽规划同色长链，经过宝石切换颜色，松手后确认行动；愤怒怪物会攻击危险终点。提供 6 行 × 5 列教学关、7 行 × 7 列标准关、本地存档与离线支持。生命损失跨关卡保留。"
+            "text": "像素风回合制连线斩击游戏。拖拽连接同种水果，经过宝石切换种类，松手后按 GO 执行逐个加速的连斩；危险水果会攻击路线终点。提供 6 行 × 5 列教学关、7 行 × 7 列标准关、本地存档与离线支持。生命损失跨关卡保留。"
           }
         ]
       }

@@ -1,5 +1,5 @@
 export type Point = Readonly<{ x: number; y: number }>;
-export type ColorId = 'blue' | 'green' | 'purple';
+export type ColorId = 'blue' | 'green' | 'purple' | 'red';
 
 export interface Creep {
   id: string;
@@ -84,6 +84,7 @@ export interface LevelDefinition {
 /** Event payloads retain removed entities and old positions for future animation. */
 export type GameEvent =
   | { type: 'creep-killed'; entity: Creep }
+  | { type: 'creep-crushed'; entity: Creep; gemId: string }
   | { type: 'gem-collected'; entity: Gem }
   | { type: 'player-moved'; from: Point; to: Point }
   | { type: 'exit-opened' }
@@ -108,7 +109,10 @@ export interface TurnPreview {
   reason?: string;
   kills: number;
   collectedGems: number;
+  /** New reward value earned by the route, excluding earlier pending drops. */
   rewardValue: number;
+  /** Total value of gem piles that will land, including pending drops paid out. */
+  rewardCount: number;
   damage: number;
   attackers: string[];
   blocked: number;
