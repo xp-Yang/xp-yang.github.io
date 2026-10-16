@@ -1,5 +1,7 @@
 import {
-  getLevel,
+  canOpenExit,
+  getRunLevel,
+  isElite,
   samePoint,
   type Creep,
   type Entity,
@@ -10,6 +12,10 @@ import {
 } from '../core';
 import type { TurnPresenter } from './contracts';
 import type { TurnAudio } from './game-audio';
+import {
+  DAMAGE_FEEDBACK_TIMING,
+  type TurnDamageFeedback,
+} from './damage-feedback';
 import {
   attackClipForStep,
   facingForStep,
@@ -93,6 +99,7 @@ interface Timeline {
   falling: RunState;
   falls: FallingEntity[];
   attacks: Extract<GameEvent, { type: 'attack' }>[];
+  damageHits: Extract<GameEvent, { type: 'attack' }>[];
   rewardDrops: RewardDrop[];
   initialFacing: SamuraiFacing;
   finalFacing: SamuraiFacing;
@@ -210,16 +217,30 @@ function buildTimeline(
       entities,
       player: { ...snapshot.player, pos: target.pos },
       killCount: snapshot.killCount + (target.kind === 'creep' ? 1 : 0),
+      eliteKills: (snapshot.eliteKills ?? 0) + (isElite(target) ? 1 : 0),
       carriedGems:
-        snapshot.carriedGems + (target.kind === 'gem' ? target.value : 0),
+        snapshot.carriedGems +
+        (target.kind === 'gem' ? target.value * (before.gemMultiplier ?? 1) : 0),
     };
     routeStates.push(snapshot);
   }
+  // Short-chain punishment changes existing survivors before rewards and refill.
+  const enragedEntities = { ...snapshot.entities };
+  for (const event of events) {
+    if (event.type !== 'creep-enraged') continue;
+    const entity = enragedEntities[event.entityId];
+    if (entity?.kind === 'creep')
+      enragedEntities[entity.id] = {
+        ...entity,
+        mood: 'angry',
+        attackActiveFromTurn: event.activeFromTurn,
+      };
+  }
   const cleared: RunState = {
     ...snapshot,
+    entities: enragedEntities,
     // Crushing can open the gate later; do not reveal its kills before impact.
-    exitUnlocked: snapshot.exitUnlocked ||
-      snapshot.killCount >= getLevel(before.levelId).goal,
+    exitUnlocked: snapshot.exitUnlocked || canOpenExit(snapshot),
     player: { ...after.player },
     equipmentRuntime: after.equipmentRuntime,
   };
@@ -235,14 +256,21 @@ function buildTimeline(
   const routeRecoveryEnd = Math.max(routeMotionEnd, precedingAttackEnd);
   const recoveryEnd = routeRecoveryEnd +
     (hops.length > 0 ? SAMURAI_CLIPS.stop.durationMs : 0);
-  const retaliationDuration = attacks.length > 0
-    ? Math.max(
-        TIMING.attackMs,
-        attacks.some((attack) => !attack.blocked)
-          ? SAMURAI_CLIPS.hurt.durationMs
-          : 0,
-      )
-    : 0;
+  // Animate only health points actually lost, excluding blocks and overkill.
+  const damageHits: Timeline['damageHits'] = [];
+  const lostHp = Math.max(0, before.player.hp - after.player.hp);
+  for (const attack of attacks) {
+    if (attack.blocked) continue;
+    for (let point = 0; point < attack.damage && damageHits.length < lostHp; point += 1)
+      damageHits.push(attack);
+  }
+  const retaliationDuration = Math.max(
+    attacks.length > 0 ? TIMING.attackMs : 0,
+    damageHits.length > 0
+      ? (damageHits.length - 1) * DAMAGE_FEEDBACK_TIMING.hitStaggerMs +
+        Math.max(DAMAGE_FEEDBACK_TIMING.durationMs, SAMURAI_CLIPS.hurt.durationMs)
+      : 0,
+  );
   const rewardsAt = recoveryEnd + retaliationDuration;
   const crushedByGem = new Map(
     events.flatMap((event) => event.type === 'creep-crushed'
@@ -279,28 +307,12 @@ function buildTimeline(
   // Finish all blade cuts, reward impacts and fruit explosions before refill.
   const fallAt = Math.max(rewardEffectsEnd, fruitCutsEnd) + TIMING.clearPauseMs;
 
-  // New rage is revealed only after the board finishes settling.
-  const falling: RunState = {
-    ...after,
-    entities: Object.fromEntries(
-      Object.entries(after.entities).map(([id, entity]) => {
-        const old = before.entities[id];
-        return [
-          id,
-          entity.kind === 'creep' && old?.kind === 'creep'
-            ? {
-                ...entity,
-                mood: old.mood,
-                attackActiveFromTurn: old.attackActiveFromTurn,
-              }
-            : entity,
-        ];
-      }),
-    ),
-  };
+  // Mutated survivors keep their warning while falling; angry refills arrive
+  // with their own warning rather than appearing calm until landing finishes.
+  const falling: RunState = after;
   const falls: FallingEntity[] = [];
   if (after.status === 'playing') {
-    const level = getLevel(after.levelId);
+    const level = getRunLevel(after);
     const moved = new Map(
       events.flatMap((event) =>
         event.type === 'entity-moved' ? [[event.entityId, event] as const] : [],
@@ -313,7 +325,8 @@ function buildTimeline(
     );
     const fixed = new Set(
       Object.values(after.entities)
-        .filter((entity) => entity.kind === 'gem')
+        .filter((entity) => entity.kind === 'gem' ||
+          (isElite(entity) && !spawned.has(entity.id)))
         .map((entity) => `${entity.pos.x},${entity.pos.y}`),
     );
     fixed.add(`${after.player.pos.x},${after.player.pos.y}`);
@@ -381,6 +394,7 @@ function buildTimeline(
     falling,
     falls,
     attacks,
+    damageHits,
     rewardDrops,
     initialFacing,
     finalFacing: facing,
@@ -528,12 +542,14 @@ function spriteAt(timeline: Timeline, elapsed: number): SamuraiPose {
       facing: finalFacing,
     };
 
-  const attackAge = elapsed - timeline.recoveryEnd;
-  if (
-    timeline.attacks.some((attack) => !attack.blocked) &&
-    attackAge < SAMURAI_CLIPS.hurt.durationMs
-  )
-    return { clip: 'hurt', elapsedMs: attackAge, facing: finalFacing };
+  const damageAge = elapsed - timeline.recoveryEnd;
+  const hitIndex = Math.min(
+    timeline.damageHits.length - 1,
+    Math.floor(damageAge / DAMAGE_FEEDBACK_TIMING.hitStaggerMs),
+  );
+  const hurtAge = damageAge - hitIndex * DAMAGE_FEEDBACK_TIMING.hitStaggerMs;
+  if (hitIndex >= 0 && hurtAge >= 0 && hurtAge < SAMURAI_CLIPS.hurt.durationMs)
+    return { clip: 'hurt', elapsedMs: hurtAge, facing: finalFacing };
 
   return {
     clip: 'idle',
@@ -622,29 +638,31 @@ function frameAt(timeline: Timeline, elapsed: number): MotionFrame {
       settle,
     );
     routeProgress = timeline.routeLength;
-    const attackAge = elapsed - timeline.recoveryEnd;
-    if (
-      timeline.attacks.length &&
-      elapsed >= timeline.recoveryEnd &&
-      elapsed < timeline.recoveryEnd + TIMING.attackMs
-    ) {
+    const timedAttacks = [
+      ...timeline.attacks.filter((attack) => attack.blocked)
+        .map((attack) => ({ attack, at: timeline.recoveryEnd })),
+      ...timeline.damageHits.map((attack, index) => ({
+        attack,
+        at: timeline.recoveryEnd + index * DAMAGE_FEEDBACK_TIMING.hitStaggerMs,
+      })),
+    ];
+    for (const { attack, at } of timedAttacks) {
+      const attackAge = elapsed - at;
+      if (attackAge < 0 || attackAge >= TIMING.attackMs) continue;
       phase = 'impact';
       const pulse = Math.sin(clamp(attackAge / TIMING.attackMs) * Math.PI);
-      for (const attack of timeline.attacks) {
-        const direction = mix(attack.from, attack.to, pulse * 0.14);
-        entities[attack.attackerId] = { pos: direction };
-        impacts.push({
-          pos: attack.to,
-          radius: 0.3 + (attackAge / TIMING.attackMs) * 0.45,
-          alpha: (1 - attackAge / TIMING.attackMs) * 0.8,
-          color: attack.blocked ? '#ccebc1' : '#ff725a',
-        });
-      }
+      entities[attack.attackerId] = { pos: mix(attack.from, attack.to, pulse * 0.14) };
+      impacts.push({
+        pos: attack.to,
+        radius: 0.3 + (attackAge / TIMING.attackMs) * 0.45,
+        alpha: (1 - attackAge / TIMING.attackMs) * 0.8,
+        color: attack.blocked ? '#ccebc1' : '#ff725a',
+      });
     }
     if (after.status === 'playing' && elapsed >= timeline.rewardsAt) {
       phase = 'reward';
       const rewardEntities = { ...timeline.cleared.entities };
-      const level = getLevel(after.levelId);
+      const level = getRunLevel(after);
       let crushed = 0;
       for (const drop of timeline.rewardDrops) {
         if (elapsed < drop.start) continue;
@@ -688,8 +706,10 @@ function frameAt(timeline: Timeline, elapsed: number): MotionFrame {
         ...timeline.cleared,
         entities: rewardEntities,
         killCount: timeline.cleared.killCount + crushed,
-        exitUnlocked: timeline.cleared.exitUnlocked ||
-          timeline.cleared.killCount + crushed >= level.goal,
+        exitUnlocked: timeline.cleared.exitUnlocked || canOpenExit({
+          ...timeline.cleared,
+          killCount: timeline.cleared.killCount + crushed,
+        }),
       };
     }
     if (after.status === 'playing' && elapsed >= timeline.fallAt) {
@@ -749,7 +769,12 @@ function frameAt(timeline: Timeline, elapsed: number): MotionFrame {
 export class AnimatedTurnPresenter implements TurnPresenter {
   private finishCurrent: (() => void) | null = null;
 
-  constructor(private sink: AnimationSink, private audio?: TurnAudio) {}
+  constructor(
+    private sink: AnimationSink,
+    private audio?: TurnAudio,
+    private damageFeedback?: TurnDamageFeedback,
+    private onShield?: () => void,
+  ) {}
 
   play(
     before: RunState,
@@ -766,6 +791,8 @@ export class AnimatedTurnPresenter implements TurnPresenter {
     );
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const drawFinalFrame = () => {
+      // Clear DOM effects before the caller rebuilds the final health HUD.
+      try { this.damageFeedback?.render(null); } catch { /* Disposed HUD. */ }
       try {
         this.sink.setAnimation(frameAt(timeline, timeline.duration));
       } catch {
@@ -780,8 +807,13 @@ export class AnimatedTurnPresenter implements TurnPresenter {
       let request = 0;
       let finished = false;
       let startedAt: number | null = null;
-      const strikes = timeline.hops.filter((hop) => hop.attackClip && hop.target?.kind === 'creep');
-      let nextStrike = 0;
+      const contacts = timeline.hops.filter((hop) => hop.target);
+      let nextContact = 0;
+      let nextLanding = 0;
+      let nextDamage = 0;
+      let shieldPending = events.some(
+        (event) => event.type === 'item-consumed' && event.reason === 'shield',
+      );
       const finish = () => {
         if (finished) return;
         finished = true;
@@ -810,14 +842,47 @@ export class AnimatedTurnPresenter implements TurnPresenter {
         }
         try {
           this.sink.setAnimation(frameAt(timeline, elapsed));
+          this.damageFeedback?.render(timeline.damageHits.length > 0 ? {
+            elapsed: elapsed - timeline.recoveryEnd,
+            beforeHp: before.player.hp,
+            afterHp: after.player.hp,
+          } : null);
+          let latestHitAt: number | undefined;
+          while (nextDamage < timeline.damageHits.length) {
+            const hitAt = timeline.recoveryEnd +
+              nextDamage * DAMAGE_FEEDBACK_TIMING.hitStaggerMs;
+            if (hitAt > elapsed) break;
+            latestHitAt = hitAt;
+            nextDamage += 1;
+          }
+          if (latestHitAt !== undefined && elapsed - latestHitAt < 100)
+            this.audio?.hurt();
+          if (shieldPending && elapsed >= timeline.recoveryEnd) {
+            shieldPending = false;
+            if (elapsed - timeline.recoveryEnd < 100) {
+              this.audio?.shield?.();
+              try { this.onShield?.(); } catch { /* Disposed inventory HUD. */ }
+            }
+          }
           // Consume contact boundaries once, independent of render/frame sampling.
           // A stalled frame discards old contacts instead of producing a burst.
           let latest: Hop | undefined;
-          while (nextStrike < strikes.length && strikes[nextStrike].impact <= elapsed) {
-            latest = strikes[nextStrike++];
+          while (nextContact < contacts.length && contacts[nextContact].impact <= elapsed) {
+            latest = contacts[nextContact++];
           }
-          if (latest && elapsed - latest.impact < 100)
-            this.audio?.slash(latest.speed, latest.attackClip === 'slam');
+          if (latest && elapsed - latest.impact < 100) {
+            if (latest.target?.kind === 'gem')
+              this.audio?.gemPickup(latest.target.value * (before.gemMultiplier ?? 1));
+            else if (latest.attackClip)
+              this.audio?.slash(latest.speed, latest.attackClip === 'slam');
+          }
+          let landed: RewardDrop | undefined;
+          while (nextLanding < timeline.rewardDrops.length &&
+                 timeline.rewardDrops[nextLanding].impact <= elapsed) {
+            landed = timeline.rewardDrops[nextLanding++];
+          }
+          if (landed && elapsed - landed.impact < 100)
+            this.audio?.gemLand(landed.entity.value);
           if (!finished) request = window.requestAnimationFrame(tick);
         } catch {
           finish();

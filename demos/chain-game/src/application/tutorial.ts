@@ -1,4 +1,4 @@
-import { getLevel, TUTORIAL_CHAIN } from '../content/levels';
+import { getRunLevel, TUTORIAL_CHAIN } from '../content/levels';
 import {
   samePoint,
   type ColorId,
@@ -7,7 +7,7 @@ import {
   type RunState,
   type TurnPreview,
 } from '../core/model';
-import { entityAt, legalTargets } from '../core/path';
+import { entityAt, inspectPath, legalTargets } from '../core/path';
 import type { SessionData } from './session';
 
 export interface TutorialView {
@@ -115,7 +115,7 @@ export class TutorialController {
     if (!this.enabled(data)) return null;
     const progress = this.progress(data);
     const run = data.run;
-    const level = getLevel(run.levelId);
+    const level = getRunLevel(run);
     const entities = Object.values(run.entities);
     const gems = entities.filter((entity) => entity.kind === 'gem');
     const angry = entities.filter(
@@ -200,7 +200,7 @@ export class TutorialController {
         'inspect-danger',
         5,
         '红框就是危险范围',
-        '危险水果会攻击上下左右的格子，刚变危险时下回合才会攻击。避开红框落脚，点击别处关闭范围。',
+        '危险水果会攻击上下左右的格子，刚变危险时下回合才会攻击。首关少于 4 连会让场上水果变异；避开红框落脚，点击别处关闭范围。',
         'board',
         {
           cells:
@@ -214,34 +214,37 @@ export class TutorialController {
       );
     }
 
-    if (run.exitUnlocked) {
-      const selectable = new Set(legalTargets(run, path));
-      const inspectableAngry = angry.find(
-        (entity) => !selectable.has(entity.id) && !path.includes(entity.id),
+    const selectable = new Set(legalTargets(run, path));
+    const inspectableAngry = angry.find(
+      (entity) => !selectable.has(entity.id) && !path.includes(entity.id),
+    );
+    if (
+      inspectableAngry &&
+      !progress.inspectedDanger &&
+      !progress.dangerAcknowledged &&
+      path.length === 0
+    )
+      return show(
+        'discover-danger',
+        5,
+        '水果变得危险了',
+        '短连击会使水果变异。轻点标出的危险水果，查看闪烁红框标出的攻击范围，再规划安全的路线。',
+        'board',
+        {
+          cells: [inspectableAngry.pos],
+          action: '继续规划',
+          acknowledge: 'danger',
+        },
       );
-      if (
-        inspectableAngry &&
-        !progress.inspectedDanger &&
-        !progress.dangerAcknowledged &&
-        path.length === 0
-      )
-        return show(
-          'discover-danger',
-          5,
-          '水果变得危险了',
-          '带红色感叹号的水果会攻击。轻点标出的危险水果，查看闪烁红框标出的危险范围，再规划离开的路线。',
-          'board',
-          {
-            cells: [inspectableAngry.pos],
-            action: '先去出口',
-            acknowledge: 'danger',
-          },
-        );
+
+    if (run.exitUnlocked || (preview.valid && inspectPath(run, path).exitAvailable)) {
       return show(
         'reach-exit',
         6,
-        '出口已经打开',
-        '继续连接水果，走到出口下方，再把路线连到顶部出口。不必继续切开更多水果就能撤离。',
+        run.exitUnlocked ? '出口已经打开' : '这条路线已经能开门',
+        run.exitUnlocked
+          ? '继续连接水果，走到出口下方，再把路线连到顶部出口。不必继续切开更多水果就能撤离。'
+          : '沿这条路线走到门前，再拖向顶部出口。松手按 GO，就能切开水果并直接撤离；回拖离开门会重新锁上。',
         'exit',
         {
           cells: [...level.exit.entryCells, level.exit.pos],
@@ -259,7 +262,7 @@ export class TutorialController {
         '经过宝石后，你接上了另一种水果。可以继续延长路线，也可以松手，按 GO 出发。',
         dragging ? 'board' : 'execute',
         {
-          detail: `本次连击 ${preview.kills} · 拾取 ${preview.collectedGems} 颗宝石`,
+          detail: `本次连击 ${preview.chainCount} · 拾取 ${preview.collectedGems} 颗宝石`,
         },
       );
 
@@ -272,7 +275,7 @@ export class TutorialController {
         'gem-switch',
         3,
         '宝石可以切换水果种类',
-        '路线经过宝石后，下一个相邻目标可以换成另一种水果。接上后，再继续连接同种水果。',
+        '路线经过宝石后，下一个相邻目标可以换成另一种水果。每堆宝石也计 1 次连击。',
         'board',
         { cells: availableCells(), detail: '也可以在宝石处结束路线，不必切换水果种类' },
       );
@@ -282,11 +285,11 @@ export class TutorialController {
         'gem-in-route',
         3,
         '宝石已经选入',
-        '执行路线后就会收集这颗宝石。现在可以继续连接同种水果，也可以沿原路回拖调整。',
+        '执行路线后就会收集这堆宝石，它也计 1 次连击。可以继续连接水果，也可以沿原路回拖调整。',
         'board',
         {
           cells: availableCells(),
-          detail: `本次连击 ${preview.kills} · 拾取 ${preview.collectedGems} 颗宝石`,
+          detail: `本次连击 ${preview.chainCount} · 拾取 ${preview.collectedGems} 颗宝石`,
         },
       );
 
@@ -300,8 +303,8 @@ export class TutorialController {
         {
           detail:
             preview.rewardValue > 0
-              ? `${preview.kills} 连击 · 将生成价值 ${preview.rewardValue} 的宝石`
-              : `本次连击 ${preview.kills} · 10 连击起可生成宝石`,
+              ? `${preview.chainCount} 连击 · 将生成价值 ${preview.rewardValue} 的宝石`
+              : `本次连击 ${preview.chainCount} · 10 连击起可生成宝石`,
         },
       );
 
@@ -323,15 +326,15 @@ export class TutorialController {
       return show(
         'extend-first-chain',
         1,
-        preview.kills >= 10 ? '已连满十个' : '试试一笔连十个',
-        preview.kills >= 10
+        preview.chainCount >= 10 ? '已连满十个' : '试试一笔连十个',
+        preview.chainCount >= 10
           ? '这条路线已经能生成宝石。松手后再决定是否执行；想调整路线，沿已选水果往回拖即可。'
-          : '一笔切开 10 个水果会生成宝石，连得更长，奖励更多。沿原路回拖可以重新规划。',
+          : '一笔连满 10 个水果或宝石节点会生成宝石。每堆宝石计 1 次，连得更长，奖励更多。',
         'board',
         {
           route,
           cells: route.length > 1 ? [route[1]] : availableCells(),
-          detail: `${preview.kills} / 10 连击 · 不必照着示范路线走`,
+          detail: `${preview.chainCount} / 10 连击 · 不必照着示范路线走`,
         },
       );
     }
@@ -341,7 +344,7 @@ export class TutorialController {
         'collect-gem',
         3,
         '收下这颗宝石',
-        '长链产生的宝石会留在棋盘上。把路线连到宝石并执行，才能收集；经过它还可以切换水果种类。',
+        '长链产生的宝石会留在棋盘上。连到它并执行才能收集；每堆宝石计 1 次连击，还可以切换水果种类。',
         'board',
         {
           cells: gems.map((gem) => gem.pos),
@@ -354,11 +357,11 @@ export class TutorialController {
         'earn-first-gem',
         3,
         '长链会留下宝石',
-        '一次连接并切开 10 个水果，会在棋盘上生成宝石。可以先切开短链调整棋盘，寻找更长的路线。',
+        '一次连接 10 个水果或宝石节点，会在棋盘上生成宝石。每堆宝石计 1 次；可以先切短链调整棋盘。',
         'board',
         {
           cells: dragging ? availableCells() : [],
-          detail: `${preview.kills} / 10 连击 · 连得越长，宝石价值越高`,
+          detail: `${preview.chainCount} / 10 连击 · 连得越长，宝石价值越高`,
           action: '记住了',
           acknowledge: 'long-chain',
         },

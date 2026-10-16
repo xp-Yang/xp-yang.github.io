@@ -1,5 +1,6 @@
 export type Point = Readonly<{ x: number; y: number }>;
 export type ColorId = 'blue' | 'green' | 'purple' | 'red';
+export type ItemKind = 'shield' | 'teleport' | 'combo-3' | 'combo-5' | 'combo-10';
 
 export interface Creep {
   id: string;
@@ -28,6 +29,7 @@ export type BuildEffect =
   | {
       type: 'chain-reward-flat-bonus';
       effectId: string;
+      /** Legacy field name: threshold counts both fruit and gem route nodes. */
       minKills: number;
       bonusValue: number;
     };
@@ -41,6 +43,8 @@ export interface RunBuildSnapshot {
 export interface RunState {
   runId: string;
   levelId: string;
+  /** Generated runs retain their complete definition across generator updates. */
+  levelSnapshot?: LevelDefinition;
   rulesVersion: string;
   contentVersion: string;
   revision: number;
@@ -49,6 +53,16 @@ export interface RunState {
   player: { pos: Point; hp: number; maxHp: number };
   entities: Record<string, Entity>;
   killCount: number;
+  /** Optional only for saves created before elite fruit were introduced. */
+  eliteKills?: number;
+  /** Cumulative short routes this level; older saves default to zero. */
+  shortChainCount?: number;
+  /** Purchased consumables persist across levels until used. */
+  inventory?: ItemKind[];
+  /** A selected combo potion is spent only when a valid route is executed. */
+  selectedComboIndex?: number;
+  /** Collection bonus for this level; gem piles retain their original value. */
+  gemMultiplier?: 1 | 2;
   carriedGems: number;
   pendingDrops: { value: number }[];
   exitUnlocked: boolean;
@@ -60,6 +74,13 @@ export interface RunState {
 
 export interface LevelDefinition {
   id: string;
+  levelNumber: number;
+  generation?: {
+    version: 'v1';
+    worldSeed: number;
+    stageSeed: number;
+    template: string;
+  };
   name: string;
   description: string;
   width: number;
@@ -71,14 +92,12 @@ export interface LevelDefinition {
   colors: readonly ColorId[];
   initialRows?: readonly string[];
   unlockAfter?: string;
-  rage:
-    | { activation: 'exit-open-at-turn-start'; newAngryPerTurn: number }
-    | {
-        activation: 'turn-count';
-        startTurn: number;
-        newAngryPerTurn: number;
-        newAngryAfterExitOpened: number;
-      };
+  elite?: {
+    initialPos: Point;
+    minChain: number;
+    /** Chance per newly spawned fruit while no elite remains on the board. */
+    respawnChance: number;
+  };
 }
 
 /** Event payloads retain removed entities and old positions for future animation. */
@@ -86,6 +105,7 @@ export type GameEvent =
   | { type: 'creep-killed'; entity: Creep }
   | { type: 'creep-crushed'; entity: Creep; gemId: string }
   | { type: 'gem-collected'; entity: Gem }
+  | { type: 'item-consumed'; item: ItemKind; reason: 'combo' | 'shield' }
   | { type: 'player-moved'; from: Point; to: Point }
   | { type: 'exit-opened' }
   | {
@@ -107,6 +127,8 @@ export type GameEvent =
 export interface TurnPreview {
   valid: boolean;
   reason?: string;
+  /** Fruit and gem piles count once, plus a selected combo potion; the exit never counts. */
+  chainCount: number;
   kills: number;
   collectedGems: number;
   /** New reward value earned by the route, excluding earlier pending drops. */

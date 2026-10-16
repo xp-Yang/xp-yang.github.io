@@ -54,7 +54,7 @@ export function gemClusterPlacements(value: number): readonly GemPlacement[] {
   return result;
 }
 
-/** Draw at the cell centre; the caller owns positioning and route numbering. */
+/** Draw at the cell centre; the caller owns positioning and route overlays. */
 export class GemVisual {
   private readonly image = new Image();
   private available = false;

@@ -1,11 +1,28 @@
 import {
   createRun,
-  getLevel,
   LEVELS,
   resolveTurn,
   type RunState,
   type GameEvent,
+  type LevelDefinition,
+  type ItemKind,
 } from '../core';
+import { canOpenExit, isElite } from '../core/combat';
+import { isItemKind, itemComboBonus, MAX_ITEMS } from '../core/items';
+import {
+  drawShopOffers,
+  getShopOffer,
+  isShopOfferId,
+  SHOP_REFRESH_PRICE,
+  type ShopOfferId,
+  type ShopState,
+} from './shop';
+import {
+  getLevel,
+  getRunLevel,
+  makeEndlessLevelId,
+  parseEndlessLevelId,
+} from '../content/levels';
 
 export interface Profile {
   id: string;
@@ -16,6 +33,16 @@ export interface Profile {
   settledRunIds: string[];
   equipment: Record<string, { level: number }>;
   abilityLevels: Record<string, number>;
+  /** Consumables survive level transitions until used. Legacy saves have none. */
+  inventory?: ItemKind[];
+}
+
+export interface EndlessProgress {
+  worldSeed: number;
+  generatorVersion: 'v1';
+  highestUnlocked: number;
+  /** Only the current generated run needs a settlement receipt. */
+  lastSettledRunId?: string;
 }
 
 export interface SessionData {
@@ -25,6 +52,10 @@ export interface SessionData {
   run: RunState;
   runSeed: number;
   actions: string[][];
+  endless?: EndlessProgress;
+  shop?: ShopState;
+  /** Applied to the next entered run, then removed from the session. */
+  nextGemMultiplier?: 2;
 }
 
 export function newSession(seed: number, id: string): SessionData {
@@ -40,6 +71,7 @@ export function newSession(seed: number, id: string): SessionData {
       settledRunIds: [],
       equipment: {},
       abilityLevels: {},
+      inventory: [],
     },
     run: createRun(LEVELS[0].id, seed, 3, `${id}-0`),
     runSeed: seed,
@@ -47,31 +79,215 @@ export function newSession(seed: number, id: string): SessionData {
   };
 }
 
+/** Old fixed-stage saves acquire the same world seed whenever they first continue. */
+function endlessProgress(data: SessionData): EndlessProgress | undefined {
+  if (data.endless) return data.endless;
+  if (!data.profile.clearedLevelIds.includes(LEVELS[2].id)) return undefined;
+  let worldSeed = data.runSeed >>> 0;
+  for (const character of data.profile.id)
+    worldSeed = Math.imul(worldSeed ^ character.charCodeAt(0), 16777619) >>> 0;
+  return { worldSeed, generatorVersion: 'v1', highestUnlocked: 4 };
+}
+
 export function isLevelUnlocked(data: SessionData, levelId: string): boolean {
-  const level = LEVELS.find((candidate) => candidate.id === levelId);
+  const fixed = LEVELS.find((candidate) => candidate.id === levelId);
+  if (fixed)
+    return !fixed.unlockAfter || data.profile.clearedLevelIds.includes(fixed.unlockAfter);
+  const generated = parseEndlessLevelId(levelId);
+  const progress = endlessProgress(data);
   return Boolean(
-    level &&
-    (!level.unlockAfter ||
-      data.profile.clearedLevelIds.includes(level.unlockAfter)),
+    generated && progress &&
+    generated.worldSeed === progress.worldSeed &&
+    generated.generatorVersion === progress.generatorVersion &&
+    generated.levelNumber <= progress.highestUnlocked,
   );
 }
 
-/** A new board never replenishes health. Only an explicit future purchase may do so. */
+/** Continue the escaped stage directly, keeping one durable world identity. */
+export function getNextSessionLevelId(data: SessionData): string | undefined {
+  if (data.run.status !== 'escaped') return undefined;
+  const fixedIndex = LEVELS.findIndex((level) => level.id === data.run.levelId);
+  if (fixedIndex >= 0 && fixedIndex < LEVELS.length - 1)
+    return LEVELS[fixedIndex + 1].id;
+  const progress = endlessProgress(data);
+  if (!progress) return undefined;
+  const nextNumber = fixedIndex >= 0 ? 4 : getRunLevel(data.run).levelNumber + 1;
+  if (!Number.isSafeInteger(nextNumber)) return undefined;
+  return makeEndlessLevelId(nextNumber, progress.worldSeed);
+}
+
+/** Keep the menu bounded: the current generated stage and the unlocked frontier. */
+export function getAvailableEndlessLevelIds(data: SessionData): string[] {
+  const progress = endlessProgress(data);
+  if (!progress) return [];
+  const current = parseEndlessLevelId(data.run.levelId) ? data.run.levelId : undefined;
+  const frontier = makeEndlessLevelId(progress.highestUnlocked, progress.worldSeed);
+  return [...new Set(current ? [current, frontier] : [frontier])];
+}
+
+/** Shop stock is drawn once for an escaped run and survives refresh/reload. */
+export function ensureShop(data: SessionData): SessionData {
+  if (data.run.status !== 'escaped' || getRunLevel(data.run).levelNumber === 1)
+    return data;
+  if (data.shop?.runId === data.run.runId) return data;
+  const nextLevelId = getNextSessionLevelId(data);
+  if (!nextLevelId) return data;
+  let seed = (data.runSeed ^ 0xa511e9b3) >>> 0;
+  for (const character of data.run.runId)
+    seed = Math.imul(seed ^ character.charCodeAt(0), 16777619) >>> 0;
+  const drawn = drawShopOffers(seed);
+  return {
+    ...data,
+    revision: data.revision + 1,
+    shop: {
+      runId: data.run.runId,
+      nextLevelId,
+      ...drawn,
+      purchased: [],
+      refreshCount: 0,
+      closed: false,
+    },
+  };
+}
+
+export function getShopOfferState(
+  data: SessionData,
+  id: ShopOfferId,
+): { disabled: boolean; reason?: string } {
+  const shop = data.shop;
+  if (data.run.status !== 'escaped' || !shop || shop.runId !== data.run.runId || shop.closed)
+    return { disabled: true, reason: '商店已关闭' };
+  if (!shop.offers.includes(id)) return { disabled: true, reason: '商品不在本次货架中' };
+  if (shop.purchased.includes(id)) return { disabled: true, reason: '已购买' };
+  const offer = getShopOffer(id);
+  if (offer.healing && data.profile.health >= data.profile.maxHealth)
+    return { disabled: true, reason: '生命已满' };
+  if (offer.item && (data.profile.inventory?.length ?? 0) >= MAX_ITEMS)
+    return { disabled: true, reason: '道具栏已满' };
+  if (id === 'double-gems' && data.nextGemMultiplier === 2)
+    return { disabled: true, reason: '已准备双倍宝石' };
+  if (data.profile.bankedGems < offer.price)
+    return { disabled: true, reason: '宝石不足' };
+  return { disabled: false };
+}
+
+export function buyShopOffer(data: SessionData, id: ShopOfferId): SessionData {
+  data = ensureShop(data);
+  const availability = getShopOfferState(data, id);
+  if (availability.disabled) throw new Error(availability.reason);
+  const offer = getShopOffer(id);
+  const inventory = [...(data.profile.inventory ?? [])];
+  if (offer.item) inventory.push(offer.item);
+  const health = Math.min(data.profile.maxHealth, data.profile.health + (offer.healing ?? 0));
+  return {
+    ...data,
+    revision: data.revision + 1,
+    profile: {
+      ...data.profile,
+      health,
+      bankedGems: data.profile.bankedGems - offer.price,
+      inventory,
+    },
+    run: {
+      ...data.run,
+      player: { ...data.run.player, hp: health },
+      inventory: [...inventory],
+    },
+    nextGemMultiplier: id === 'double-gems' ? 2 : data.nextGemMultiplier,
+    shop: { ...data.shop!, purchased: [...data.shop!.purchased, id] },
+  };
+}
+
+export function refreshShop(data: SessionData): SessionData {
+  data = ensureShop(data);
+  const shop = data.shop;
+  if (!shop || shop.closed || shop.runId !== data.run.runId || data.run.status !== 'escaped')
+    throw new Error('商店已关闭。');
+  if (data.profile.bankedGems < SHOP_REFRESH_PRICE) throw new Error('刷新需要 5 宝石。');
+  const drawn = drawShopOffers(shop.rng);
+  return {
+    ...data,
+    revision: data.revision + 1,
+    profile: { ...data.profile, bankedGems: data.profile.bankedGems - SHOP_REFRESH_PRICE },
+    shop: { ...shop, ...drawn, purchased: [], refreshCount: shop.refreshCount + 1 },
+  };
+}
+
+export function finishShop(data: SessionData): SessionData {
+  data = ensureShop(data);
+  if (!data.shop || data.shop.closed) return data;
+  return { ...data, revision: data.revision + 1, shop: { ...data.shop, closed: true } };
+}
+
+/** Selecting a potion changes only the next route's preview, not the board. */
+export function selectComboItem(data: SessionData, index: number | null): SessionData {
+  if (data.run.status !== 'playing') throw new Error('当前不能使用道具。');
+  if (index !== null &&
+      (!Number.isInteger(index) || !itemComboBonus(data.run.inventory?.[index])))
+    throw new Error('请选择连击药水。');
+  if (data.run.selectedComboIndex === (index ?? undefined)) return data;
+  return {
+    ...data,
+    revision: data.revision + 1,
+    run: { ...data.run, revision: data.run.revision + 1, selectedComboIndex: index ?? undefined },
+  };
+}
+
+/** Swap the chosen cell into the old player cell without combat or a new turn. */
+export function teleportItem(data: SessionData, index: number, targetEntityId: string): SessionData {
+  if (data.run.status !== 'playing') throw new Error('当前不能使用道具。');
+  if (!Number.isInteger(index) || data.run.inventory?.[index] !== 'teleport')
+    throw new Error('请选择瞬移药水。');
+  const target = data.run.entities[targetEntityId];
+  if (!target || (target.kind === 'creep' && isElite(target)))
+    throw new Error('请选择普通水果或宝石所在的位置。');
+  const inventory = [...data.run.inventory];
+  inventory.splice(index, 1);
+  return {
+    ...data,
+    revision: data.revision + 1,
+    profile: { ...data.profile, inventory: [...inventory] },
+    run: {
+      ...data.run,
+      revision: data.run.revision + 1,
+      inventory,
+      selectedComboIndex: undefined,
+      player: { ...data.run.player, pos: { ...target.pos } },
+      entities: {
+        ...data.run.entities,
+        [target.id]: { ...target, pos: { ...data.run.player.pos } },
+      },
+    },
+  };
+}
+
+/** Health and consumables carry across levels; a shop purchase is the only heal. */
 export function startLevel(
   data: SessionData,
   levelId: string,
   seed: number,
   runId: string,
 ): SessionData {
+  data = ensureShop(data);
+  if (data.shop?.runId === data.run.runId && !data.shop.closed)
+    throw new Error('请先完成关间商店。');
   if (!isLevelUnlocked(data, levelId))
     throw new Error('请先从上一关的出口撤离。');
   if (data.profile.health <= 0) throw new Error('生命已耗尽，无法进入关卡。');
+  const level = getLevel(levelId);
+  const stageSeed = level.generation?.stageSeed ?? seed;
+  const run = createRun(levelId, stageSeed, data.profile.health, runId);
+  run.inventory = [...(data.profile.inventory ?? [])];
+  run.gemMultiplier = data.nextGemMultiplier ?? 1;
   return {
     ...data,
     revision: data.revision + 1,
-    run: createRun(levelId, seed, data.profile.health, runId),
-    runSeed: seed,
+    run,
+    runSeed: stageSeed,
+    endless: endlessProgress(data),
     actions: [],
+    shop: undefined,
+    nextGemMultiplier: undefined,
   };
 }
 
@@ -88,30 +304,59 @@ export function commitPath(
   });
   if (!result.ok) return result;
   const run = result.state;
-  let profile: Profile = { ...data.profile, health: run.player.hp };
-  if (run.status === 'escaped' && !profile.settledRunIds.includes(run.runId)) {
-    profile = {
-      ...profile,
-      bankedGems: profile.bankedGems + run.carriedGems,
-      settledRunIds: [...profile.settledRunIds, run.runId],
-      clearedLevelIds: [...new Set([...profile.clearedLevelIds, run.levelId])],
-    };
+  let profile: Profile = {
+    ...data.profile,
+    health: run.player.hp,
+    inventory: [...(run.inventory ?? [])],
+  };
+  let endless = endlessProgress(data);
+  const generated = parseEndlessLevelId(run.levelId);
+  const alreadySettled = generated
+    ? endless?.lastSettledRunId === run.runId
+    : profile.settledRunIds.includes(run.runId);
+  if (run.status === 'escaped' && !alreadySettled) {
+    profile = { ...profile, bankedGems: profile.bankedGems + run.carriedGems };
+    if (generated && endless) {
+      endless = {
+        ...endless,
+        highestUnlocked: Math.max(endless.highestUnlocked, generated.levelNumber + 1),
+        lastSettledRunId: run.runId,
+      };
+    } else {
+      profile = {
+        ...profile,
+        settledRunIds: [...profile.settledRunIds, run.runId],
+        clearedLevelIds: [...new Set([...profile.clearedLevelIds, run.levelId])],
+      };
+      endless = endlessProgress({ ...data, profile });
+    }
   }
   return {
     ok: true,
-    data: {
+    data: ensureShop({
       ...data,
       revision: data.revision + 1,
       run,
       profile,
+      endless,
       actions: [...data.actions, [...targets]],
-    },
+    }),
     events: result.events,
   };
 }
 
-/** Keep existing tutorial boards while adopting its updated fruit palette. */
+/** Adopt new metadata and fruit palettes without replaying or resetting old runs. */
 export function normalizeSessionData(data: SessionData): SessionData {
+  if (data.run.shortChainCount === undefined)
+    data = { ...data, run: { ...data.run, shortChainCount: 0 } };
+  if (data.profile.inventory === undefined || data.run.inventory === undefined) {
+    const inventory = data.run.inventory ?? data.profile.inventory ?? [];
+    data = {
+      ...data,
+      profile: { ...data.profile, inventory: [...inventory] },
+      run: { ...data.run, inventory: [...inventory] },
+    };
+  }
   if (data.run.levelId !== 'level-001') return data;
   let changed = false;
   const entities: RunState['entities'] = {};
@@ -154,6 +399,20 @@ export function isSessionData(value: unknown): value is SessionData {
       return false;
     if (!Number.isSafeInteger(profile.bankedGems) || profile.bankedGems < 0)
       return false;
+    const validInventory = (items: unknown): items is ItemKind[] =>
+      Array.isArray(items) && items.length <= MAX_ITEMS && items.every(isItemKind);
+    if ((profile.inventory !== undefined && !validInventory(profile.inventory)) ||
+        (run.inventory !== undefined && !validInventory(run.inventory)))
+      return false;
+    const inventory = run.inventory ?? [];
+    if (JSON.stringify(inventory) !== JSON.stringify(profile.inventory ?? [])) return false;
+    if (run.selectedComboIndex !== undefined &&
+        (run.status !== 'playing' || !nonnegativeInteger(run.selectedComboIndex) ||
+         !itemComboBonus(inventory[run.selectedComboIndex])))
+      return false;
+    if (run.gemMultiplier !== undefined && run.gemMultiplier !== 1 && run.gemMultiplier !== 2)
+      return false;
+    if (data.nextGemMultiplier !== undefined && data.nextGemMultiplier !== 2) return false;
     if (
       ![profile.clearedLevelIds, profile.settledRunIds].every(
         (items) =>
@@ -210,13 +469,18 @@ export function isSessionData(value: unknown): value is SessionData {
     )
       return false;
     if (
+      run.shortChainCount !== undefined &&
+      (!nonnegativeInteger(run.shortChainCount) || run.shortChainCount > run.turn)
+    )
+      return false;
+    if (
       !Number.isSafeInteger(run.carriedGems) ||
       run.carriedGems < 0 ||
       typeof run.exitUnlocked !== 'boolean'
     )
       return false;
     if (
-      run.turn !== run.revision ||
+      run.revision < run.turn ||
       data.revision < run.revision ||
       data.actions.length !== run.turn
     )
@@ -280,10 +544,49 @@ export function isSessionData(value: unknown): value is SessionData {
       )
     )
       return false;
-    const level = getLevel(run.levelId);
+    const generated = parseEndlessLevelId(run.levelId);
+    if (data.endless !== undefined) {
+      const progress = data.endless;
+      if (
+        !record(progress) || progress.generatorVersion !== 'v1' ||
+        !nonnegativeInteger(progress.worldSeed) || progress.worldSeed > 0xffffffff ||
+        !Number.isSafeInteger(progress.highestUnlocked) || progress.highestUnlocked < 4 ||
+        !profile.clearedLevelIds.includes(LEVELS[2].id) ||
+        (progress.lastSettledRunId !== undefined && !nonemptyString(progress.lastSettledRunId))
+      ) return false;
+    }
+    if (generated) {
+      if (!data.endless || !validLevelSnapshot(run.levelSnapshot, run.levelId) ||
+          runSeedMismatch(data.runSeed, run.levelSnapshot)) return false;
+    } else if (!LEVELS.some((level) => level.id === run.levelId) ||
+               run.levelSnapshot !== undefined) return false;
+    const level = getRunLevel(run);
+    if (data.shop !== undefined) {
+      const shop = data.shop;
+      if (!record(shop) || run.status !== 'escaped' || level.levelNumber < 2 ||
+          shop.runId !== run.runId || shop.nextLevelId !== getNextSessionLevelId(data) ||
+          !Array.isArray(shop.offers) || shop.offers.length !== 3 ||
+          !shop.offers.every(isShopOfferId) || new Set(shop.offers).size !== 3 ||
+          !Array.isArray(shop.purchased) || !shop.purchased.every(isShopOfferId) ||
+          new Set(shop.purchased).size !== shop.purchased.length ||
+          !shop.purchased.every((id) => shop.offers.includes(id)) ||
+          !positiveInteger(shop.rng) || shop.rng > 0xffffffff ||
+          !nonnegativeInteger(shop.refreshCount) || typeof shop.closed !== 'boolean')
+        return false;
+    }
+    if (data.nextGemMultiplier !== undefined &&
+        (run.status !== 'escaped' || !data.shop)) return false;
+    const eliteKills = run.eliteKills ?? 0;
+    if (
+      (run.eliteKills !== undefined && !nonnegativeInteger(run.eliteKills)) ||
+      (level.elite && run.eliteKills === undefined) ||
+      (!level.elite && eliteKills !== 0) ||
+      eliteKills > run.killCount
+    )
+      return false;
     if (
       !isLevelUnlocked(data, run.levelId) ||
-      run.exitUnlocked !== run.killCount >= level.goal
+      run.exitUnlocked !== canOpenExit(run)
     )
       return false;
     const inside = (point: { x: number; y: number }) =>
@@ -300,8 +603,11 @@ export function isSessionData(value: unknown): value is SessionData {
         run.player.pos.x !== level.exit.pos.x ||
         run.player.pos.y !== level.exit.pos.y ||
         !run.exitUnlocked ||
-        !profile.settledRunIds.includes(run.runId) ||
-        !profile.clearedLevelIds.includes(run.levelId)
+        !(generated
+          ? data.endless?.lastSettledRunId === run.runId &&
+            data.endless.highestUnlocked > generated.levelNumber
+          : profile.settledRunIds.includes(run.runId) &&
+            profile.clearedLevelIds.includes(run.levelId))
       )
         return false;
     } else if (!inside(run.player.pos)) return false;
@@ -312,6 +618,7 @@ export function isSessionData(value: unknown): value is SessionData {
     )
       return false;
     const occupied = new Set<string>();
+    let eliteCount = 0;
     if (inside(run.player.pos))
       occupied.add(`${run.player.pos.x},${run.player.pos.y}`);
     for (const [id, entity] of Object.entries(run.entities)) {
@@ -332,6 +639,19 @@ export function isSessionData(value: unknown): value is SessionData {
           !nonemptyString(entity.archetypeId)
         )
           return false;
+        if (isElite(entity)) {
+          eliteCount += 1;
+          if (
+            !level.elite ||
+            eliteCount > 1 ||
+            entity.mood !== 'angry' ||
+            entity.damage !== 1 ||
+            (eliteKills === 0 &&
+              (entity.pos.x !== level.elite.initialPos.x ||
+                entity.pos.y !== level.elite.initialPos.y))
+          )
+            return false;
+        }
         if (
           entity.mood === 'calm'
             ? entity.attackActiveFromTurn !== null
@@ -348,6 +668,7 @@ export function isSessionData(value: unknown): value is SessionData {
       const sequence = /^(?:creep|gem)-(\d+)$/.exec(id);
       if (sequence && Number(sequence[1]) >= run.nextEntityId) return false;
     }
+    if (level.elite && eliteKills === 0 && eliteCount !== 1) return false;
     const cellCount = level.mask.reduce(
       (count, row) =>
         count + row.split('').filter((cell) => cell === '.').length,
@@ -358,6 +679,56 @@ export function isSessionData(value: unknown): value is SessionData {
   } catch {
     return false;
   }
+}
+
+/** Validate the stored definition itself; do not regenerate an ongoing board. */
+function validLevelSnapshot(value: unknown, levelId: string): value is LevelDefinition {
+  if (!record(value)) return false;
+  const identity = parseEndlessLevelId(levelId);
+  const generation = value.generation;
+  if (!identity || value.id !== levelId || value.levelNumber !== identity.levelNumber ||
+      !nonemptyString(value.name) || !nonemptyString(value.description) ||
+      value.width !== 7 || value.height !== 7 ||
+      !positiveInteger(value.goal) || value.goal < 55 || value.goal > 95 ||
+      !record(generation) || generation.version !== identity.generatorVersion ||
+      generation.worldSeed !== identity.worldSeed ||
+      !nonnegativeInteger(generation.stageSeed) || generation.stageSeed > 0xffffffff ||
+      !['calm', 'standard', 'long-chain', 'pressure', 'guardian'].includes(String(generation.template)))
+    return false;
+  if (!Array.isArray(value.mask) || value.mask.length !== 7 ||
+      !value.mask.every((row) => row === '.......')) return false;
+  const point = (candidate: unknown, x?: number, y?: number): boolean =>
+    record(candidate) && Number.isInteger(candidate.x) && Number.isInteger(candidate.y) &&
+    (x === undefined ? Number(candidate.x) >= 0 && Number(candidate.x) < 7 : candidate.x === x) &&
+    (y === undefined ? Number(candidate.y) >= 0 && Number(candidate.y) < 7 : candidate.y === y);
+  if (!point(value.playerStart, 3, 6) || !record(value.exit) ||
+      !point(value.exit.pos, 3, -1) || !Array.isArray(value.exit.entryCells) ||
+      value.exit.entryCells.length !== 3 ||
+      !value.exit.entryCells.every((cell, index) => point(cell, index + 2, 0))) return false;
+  if (!Array.isArray(value.colors) || value.colors.length < 3 || value.colors.length > 4 ||
+      new Set(value.colors).size !== value.colors.length ||
+      !value.colors.every((color) => ['blue', 'green', 'purple', 'red'].includes(color))) return false;
+  const palette = value.colors as string[];
+  const symbols: Record<string, string> = { B: 'blue', G: 'green', P: 'purple', R: 'red' };
+  if (!Array.isArray(value.initialRows) || value.initialRows.length !== 7)
+    return false;
+  for (const [y, row] of value.initialRows.entries()) {
+    if (typeof row !== 'string' || row.length !== 7) return false;
+    for (const [x, code] of [...row].entries()) {
+      if (x === 3 && y === 6 ? code !== '.' : !palette.includes(symbols[code]))
+        return false;
+    }
+  }
+  if (generation.template === 'guardian') {
+    if (!record(value.elite) || !point(value.elite.initialPos, 3, 0) ||
+        value.elite.minChain !== 10 || value.elite.respawnChance !== 1 / 40) return false;
+  } else if (value.elite !== undefined) return false;
+  if (value.unlockAfter !== undefined && typeof value.unlockAfter !== 'string') return false;
+  return true;
+}
+
+function runSeedMismatch(seed: number, snapshot: LevelDefinition | undefined): boolean {
+  return seed !== snapshot?.generation?.stageSeed;
 }
 
 function record(value: unknown): value is Record<string, unknown> {

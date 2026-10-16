@@ -6,6 +6,7 @@ export interface BoardView {
   path: readonly string[];
   preview: TurnPreview;
   inspectedEntityId: string | null;
+  teleportSelecting?: boolean;
   tutorial?: Pick<TutorialView, 'cells' | 'route'> | null;
 }
 

@@ -1,6 +1,8 @@
 import {
   attackCells,
-  getLevel,
+  getRunLevel,
+  isElite,
+  samePoint,
   type Entity,
   type Point,
 } from '../core';
@@ -17,10 +19,16 @@ import {
 import { MOTION_TIMING, type MotionFrame, type EntityMotion } from './motion';
 import { SamuraiVisual } from './samurai-visual';
 import type { SamuraiFacing, SamuraiPose } from './samurai-sprites';
+import {
+  LEVEL_ENTRY_TIMING,
+  type LevelEntryFrame,
+  type LevelEntrySink,
+} from './level-entry-presenter';
 
-export class CanvasRenderer implements GameRenderer {
+export class CanvasRenderer implements GameRenderer, LevelEntrySink {
   private view: BoardView | null = null;
   private motion: MotionFrame | null = null;
+  private levelEntry: LevelEntryFrame | null = null;
   private ctx: CanvasRenderingContext2D;
   private cell = 1;
   private left = 0;
@@ -36,6 +44,14 @@ export class CanvasRenderer implements GameRenderer {
   private readonly gems = new GemVisual();
   private readonly gate = new GateVisual();
   private fontReady = false;
+  private endpointNumber: { count: number; image: HTMLCanvasElement } | null = null;
+  private entryCard: { key: string; image: HTMLCanvasElement } | null = null;
+  private gateTransition: {
+    runId: string;
+    from: number;
+    to: number;
+    startedAt: number;
+  } | null = null;
   private spriteTrail: {
     pos: Point;
     sprite: SamuraiPose;
@@ -108,7 +124,7 @@ export class CanvasRenderer implements GameRenderer {
             entities: { [inspected.id]: inspected },
           })
         : [];
-    const level = getLevel(view.state.levelId);
+    const level = getRunLevel(view.state);
     this.canvas.style.aspectRatio = String(
       boardAspectRatio(level.width, level.height),
     );
@@ -152,6 +168,14 @@ export class CanvasRenderer implements GameRenderer {
     this.paint();
   }
 
+  setLevelEntry(frame: LevelEntryFrame | null): void {
+    this.levelEntry = frame;
+    if (frame) this.spriteTrail = [];
+    else this.idleStartedAt = performance.now();
+    this.stopLoop();
+    this.paint();
+  }
+
   resize(): void {
     if (!this.view || this.disposed) return;
     const rect = this.canvas.getBoundingClientRect();
@@ -167,7 +191,7 @@ export class CanvasRenderer implements GameRenderer {
     this.height = rect.height;
     this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     this.ctx.imageSmoothingEnabled = false;
-    const level = getLevel(this.view.state.levelId);
+    const level = getRunLevel(this.view.state);
     this.cell = rect.width / (level.width + BOARD_SIDE_PADDING_CELLS * 2);
     this.left = this.cell * BOARD_SIDE_PADDING_CELLS;
     this.top = this.cell * BOARD_TOP_CELLS;
@@ -182,12 +206,12 @@ export class CanvasRenderer implements GameRenderer {
   }
 
   hitTest(clientX: number, clientY: number): string | null {
-    if (!this.view || this.motion) return null;
+    if (!this.view || this.motion || this.levelEntry) return null;
     const rect = this.canvas.getBoundingClientRect();
     const x = clientX - rect.left,
       y = clientY - rect.top;
     const { state } = this.view;
-    const level = getLevel(state.levelId);
+    const level = getRunLevel(state);
     const gate = exitGateBounds(this.center(level.exit.pos), this.cell);
     if (
       x >= gate.x && x <= gate.x + gate.width &&
@@ -220,12 +244,32 @@ export class CanvasRenderer implements GameRenderer {
     this.frameRequest = 0;
   }
 
+  private gateProgress(runId: string, open: boolean, time: number): number {
+    const target = open ? 1 : 0;
+    let transition = this.gateTransition;
+    // A new run starts with its own lock; previewing never updates saved state.
+    if (!transition || transition.runId !== runId || this.reducedMotion.matches) {
+      transition = { runId, from: target, to: target, startedAt: time };
+      this.gateTransition = transition;
+    }
+    const duration = Math.abs(transition.to - transition.from) * 320;
+    const t = duration ? Math.min(1, Math.max(0, (time - transition.startedAt) / duration)) : 1;
+    const current = transition.from + (transition.to - transition.from) * t;
+    if (transition.to !== target) {
+      // Reverse from the displayed pose, including a quick in/out drag.
+      transition.from = current;
+      transition.to = target;
+      transition.startedAt = time;
+    }
+    return current;
+  }
+
   private paint(time = performance.now()): void {
     if (!this.view || this.disposed || document.hidden) return;
     this.draw(time);
     // Turn playback owns its clock; idle guidance shares the preview clock.
     if (
-      !this.motion &&
+      !this.motion && !this.levelEntry &&
       ((this.samurai.loaded && this.view.state.status === 'playing') ||
         this.view.path.length ||
         this.inspectedThreatCells.length ||
@@ -324,25 +368,95 @@ export class CanvasRenderer implements GameRenderer {
     const c = this.cell;
     if (entity.kind === 'creep') {
       this.fruits.draw(this.ctx, entity.color, c);
-      if (selected || entity.mood === 'angry') {
-        this.corners(0, 0, c * 0.8, selected ? '#e5f1d5' : '#f0837c');
+      if (entity.mood === 'angry') {
+        this.corners(0, 0, c * 0.8,
+          isElite(entity) ? '#ffc975' : '#f0837c');
+      }
+      if (isElite(entity)) {
+        // A tiny native-pixel crown keeps the existing fruit art recognizable.
+        const unit = Math.max(1, Math.round(c / 32));
+        const crown = ['#...#...#', '##.###.##', '.#######.', '.#######.'];
+        const x = Math.round(-4.5 * unit), y = Math.round(-c * 0.54);
+        this.ctx.fillStyle = '#ffe08a';
+        crown.forEach((row, dy) => {
+          for (let dx = 0; dx < row.length; dx += 1)
+            if (row[dx] === '#') this.ctx.fillRect(x + dx * unit, y + dy * unit, unit, unit);
+        });
       }
     } else this.gems.drawCluster(this.ctx, c, entity.value, selected);
   }
 
-  private drawEntityLabel(entity: Entity, index: number): void {
+  private drawEntityLabel(entity: Entity): void {
     const c = this.cell;
-    if (index >= 0) {
-      const size = Math.max(16, Math.round(c * 0.3));
-      this.rect(-size / 2, -size / 2, size, size, '#17253a', '#8ba17a');
-      this.label(String(index + 1), { x: 0, y: 0 }, c * 0.18, '#f5ffdf');
-    }
     if (entity.kind === 'creep' && entity.mood === 'angry') {
       const p = { x: c * 0.27, y: -c * 0.26 };
       const size = Math.max(12, Math.round(c * 0.24));
-      this.rect(p.x - size / 2, p.y - size / 2, size, size, '#873f49', '#f09c87');
-      this.label('!', p, c * 0.17, '#fff0da');
+      const elite = isElite(entity);
+      const width = elite ? Math.max(22, size * 1.5) : size;
+      this.rect(p.x - width / 2, p.y - size / 2, width, size,
+        '#873f49', elite ? '#ffe08a' : '#f09c87');
+      const required = getRunLevel(this.view!.state).elite?.minChain ?? 10;
+      this.label(elite ? String(required) : '!', p, c * 0.17,
+        elite ? '#ffe08a' : '#fff0da');
     }
+  }
+
+  private drawEndpointCount(point: Point, count: number, headroom = 0.44): void {
+    if (!this.fontReady || count < 0) return;
+    if (this.endpointNumber?.count !== count) {
+      // Rasterize at the font's native size, then scale whole pixels. The
+      // outline is also built from native pixels, without a smooth text stroke.
+      const source = document.createElement('canvas');
+      const context = source.getContext('2d');
+      if (!context) return;
+      const text = String(count);
+      context.font = '12px "ChainPixel"';
+      source.width = Math.ceil(context.measureText(text).width) + 8;
+      source.height = 24;
+      context.font = '12px "ChainPixel"';
+      context.textBaseline = 'top';
+      context.fillStyle = '#09101d';
+      for (let y = -2; y <= 3; y += 1)
+        for (let x = -2; x <= 3; x += 1)
+          context.fillText(text, 3 + x, 3 + y);
+      context.fillStyle = '#fff4d9';
+      for (let y = -1; y <= 1; y += 1)
+        for (let x = -1; x <= 1; x += 1)
+          context.fillText(text, 3 + x, 3 + y);
+      context.fillStyle = '#ef544b';
+      context.fillText(text, 3, 3);
+
+      // Crop transparent font margins so placement follows the visible digits.
+      const pixels = context.getImageData(0, 0, source.width, source.height).data;
+      let left = source.width, top = source.height, right = -1, bottom = -1;
+      for (let y = 0; y < source.height; y += 1)
+        for (let x = 0; x < source.width; x += 1)
+          if (pixels[(y * source.width + x) * 4 + 3]) {
+            left = Math.min(left, x);
+            top = Math.min(top, y);
+            right = Math.max(right, x);
+            bottom = Math.max(bottom, y);
+          }
+      if (right < left) return;
+      const image = document.createElement('canvas');
+      image.width = right - left + 1;
+      image.height = bottom - top + 1;
+      const cropped = image.getContext('2d');
+      if (!cropped) return;
+      cropped.drawImage(source, left, top, image.width, image.height,
+        0, 0, image.width, image.height);
+      this.endpointNumber = { count, image };
+    }
+    const image = this.endpointNumber.image;
+    const scale = Math.max(1, Math.round(this.cell * 0.75 / image.height));
+    const width = image.width * scale, height = image.height * scale;
+    const p = this.center(point);
+    const x = Math.max(1, Math.min(this.width - width - 1, p.x - width / 2));
+    const y = Math.max(1, p.y - this.cell * headroom - height);
+    this.ctx.save();
+    this.ctx.imageSmoothingEnabled = false;
+    this.ctx.drawImage(image, Math.round(x), Math.round(y), width, height);
+    this.ctx.restore();
   }
 
   private drawRoute(
@@ -518,19 +632,142 @@ export class CanvasRenderer implements GameRenderer {
     ctx.restore();
   }
 
+  private createEntryCard(levelNumber: number, goal: number): HTMLCanvasElement | null {
+    // The entire sign is rasterized in native pixels, including the bevel,
+    // lettering and skull. It travels as one object instead of fading labels.
+    const image = document.createElement('canvas');
+    image.width = 128;
+    image.height = 88;
+    const context = image.getContext('2d');
+    if (!context) return null;
+    const fill = (x: number, y: number, w: number, h: number, color: string) => {
+      context.fillStyle = color;
+      context.fillRect(x, y, w, h);
+    };
+    fill(4, 4, 124, 84, '#060b13');
+    fill(0, 0, 124, 84, '#070e1a');
+    fill(2, 2, 120, 80, '#586e8a');
+    fill(4, 4, 116, 76, '#1c2b43');
+    fill(4, 4, 116, 2, '#92a8bf');
+    fill(4, 4, 2, 76, '#92a8bf');
+    fill(6, 78, 114, 2, '#101a2b');
+    fill(118, 6, 2, 74, '#101a2b');
+    context.font = '12px "ChainPixel"';
+    context.textAlign = 'center';
+    context.textBaseline = 'top';
+    context.fillStyle = '#07101d';
+    context.fillText(`关卡 ${levelNumber}`, 63, 16);
+    context.fillStyle = '#fff0ba';
+    context.fillText(`关卡 ${levelNumber}`, 62, 15);
+    fill(18, 34, 88, 1, '#5d728d');
+    fill(18, 35, 88, 1, '#0e192a');
+
+    // This small pixel skull uses the same visual language as the HUD target.
+    const skull = [
+      '..########..', '.##########.', '############',
+      '###..##..###', '###..##..###', '#####..#####',
+      '.##########.', '..#.####.#..', '..#.####.#..',
+      '..########..',
+    ];
+    const number = String(goal);
+    context.font = '24px "ChainPixel"';
+    const numberWidth = context.measureText(number).width;
+    const rowWidth = 24 + 10 + numberWidth;
+    const left = Math.round((124 - rowWidth) / 2);
+    context.fillStyle = '#d9edaf';
+    skull.forEach((row, y) => {
+      for (let x = 0; x < row.length; x += 1)
+        if (row[x] === '#') context.fillRect(left + x * 2, 49 + y * 2, 2, 2);
+    });
+    context.textAlign = 'left';
+    context.textBaseline = 'middle';
+    context.fillStyle = '#07101d';
+    context.fillText(number, left + 35, 60);
+    context.fillStyle = '#f2f6da';
+    context.fillText(number, left + 34, 59);
+    return image;
+  }
+
+  private drawLevelEntry(frame: LevelEntryFrame): void {
+    const ctx = this.ctx, c = this.cell;
+    const clamp = (value: number) => Math.max(0, Math.min(1, value));
+    const veil = 0.75 * (1 - clamp(frame.elapsed / 180));
+    if (veil > 0) {
+      ctx.save();
+      ctx.globalAlpha = veil;
+      ctx.fillStyle = '#080d19';
+      ctx.fillRect(0, 0, this.width, this.height);
+      ctx.restore();
+    }
+    if (!this.fontReady || frame.elapsed < LEVEL_ENTRY_TIMING.titleEnterAt) return;
+    const key = `${frame.levelNumber}:${frame.goal}`;
+    if (this.entryCard?.key !== key) {
+      const image = this.createEntryCard(frame.levelNumber, frame.goal);
+      if (!image) return;
+      this.entryCard = { key, image };
+    }
+    const image = this.entryCard.image;
+    const scale = Math.max(1, Math.min(
+      Math.round(c * 4.4 / image.width),
+      Math.floor(this.width * 0.9 / image.width),
+    ));
+    const width = image.width * scale, height = image.height * scale;
+    const progress = clamp((frame.elapsed - LEVEL_ENTRY_TIMING.titleEnterAt) /
+      LEVEL_ENTRY_TIMING.titleDropMs);
+    const t = progress - 1;
+    const eased = 1 + 2.70158 * t ** 3 + 1.70158 * t ** 2;
+    const fromY = -height - c * 0.25;
+    const centerY = (this.height - height) / 2;
+    const leave = clamp((frame.elapsed - LEVEL_ENTRY_TIMING.titleLeaveAt) /
+      LEVEL_ENTRY_TIMING.titleLeaveMs);
+    const y = leave > 0
+      ? centerY + (this.height + c * 0.25 - centerY) * leave ** 2
+      : fromY + (centerY - fromY) * eased;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, Math.round((this.width - width) / 2), Math.round(y), width, height);
+    ctx.restore();
+  }
+
   private draw(time: number): void {
     const view = this.view!,
-      motion = this.motion;
+      motion = this.motion,
+      entry = this.levelEntry;
     const state = motion?.state ?? view.state;
-    const path = motion ? [] : view.path;
-    const level = getLevel(state.levelId),
+    const path = motion || entry ? [] : view.path;
+    const level = getRunLevel(state),
       ctx = this.ctx,
       c = this.cell;
     ctx.clearRect(0, 0, this.width, this.height);
-    this.gate.draw(ctx, this.center(level.exit.pos), c, state.exitUnlocked);
+    const routeEndsAtGate = motion
+      ? motion.route.length > 0 && samePoint(motion.route[motion.route.length - 1], level.exit.pos)
+      : !entry && !view.teleportSelecting && view.preview.valid && view.preview.exits;
+    const gateOpen = state.exitUnlocked || routeEndsAtGate;
+    this.gate.draw(ctx, this.center(level.exit.pos), c, gateOpen,
+      this.gateProgress(state.runId, gateOpen, time));
+    const route = motion?.route ?? [
+      state.player.pos,
+      ...path
+        .map((id) => (id === 'exit' ? level.exit.pos : state.entities[id]?.pos))
+        .filter((pos): pos is Point => Boolean(pos)),
+    ];
+    // The moving line sits underneath fruit, gems, fragments and the actor.
+    this.drawRoute(route, time, motion?.routeProgress ?? 0);
     const entities = Object.values(state.entities);
+    if (view.teleportSelecting && !motion && !entry) {
+      ctx.save();
+      ctx.fillStyle = '#9ee9f3';
+      for (const entity of entities) {
+        if (isElite(entity)) continue;
+        const p = this.center(entity.pos);
+        const unit = Math.max(1, Math.round(c / 24));
+        ctx.fillRect(Math.round(p.x - unit), Math.round(p.y + c * 0.37), unit * 2, unit * 2);
+      }
+      ctx.restore();
+    }
+    const transform = (entity: Entity) => motion?.entities[entity.id] ?? entry?.entities[entity.id];
     for (const entity of entities.filter((item) => item.kind === 'creep'))
-      this.withEntity(entity, motion?.entities[entity.id], () =>
+      this.withEntity(entity, transform(entity), () =>
         this.drawEntityBody(entity, path.includes(entity.id)),
       );
     if (motion) {
@@ -544,19 +781,12 @@ export class CanvasRenderer implements GameRenderer {
     }
     // A falling gem stays in front of the pieces it just crushed.
     for (const entity of entities.filter((item) => item.kind === 'gem'))
-      this.withEntity(entity, motion?.entities[entity.id], () =>
+      this.withEntity(entity, transform(entity), () =>
         this.drawEntityBody(entity, path.includes(entity.id)),
       );
-    const route = motion?.route ?? [
-      state.player.pos,
-      ...path
-        .map((id) => (id === 'exit' ? level.exit.pos : state.entities[id]?.pos))
-        .filter((pos): pos is Point => Boolean(pos)),
-    ];
-    this.drawRoute(route, time, motion?.routeProgress ?? 0);
     for (const entity of entities)
-      this.withEntity(entity, motion?.entities[entity.id], () =>
-        this.drawEntityLabel(entity, path.indexOf(entity.id)),
+      this.withEntity(entity, transform(entity), () =>
+        this.drawEntityLabel(entity),
       );
     if (motion) {
       for (const cut of motion.fruitCuts) {
@@ -612,7 +842,7 @@ export class CanvasRenderer implements GameRenderer {
       const p = this.center(motion?.player.pos ?? state.player.pos);
       const sprite: SamuraiPose = motion?.player.sprite ?? {
         clip: 'idle',
-        elapsedMs: this.reducedMotion.matches ? 0 : time - this.idleStartedAt,
+        elapsedMs: this.reducedMotion.matches ? 0 : entry?.elapsed ?? time - this.idleStartedAt,
         facing: this.facing,
       };
       this.samurai.draw(
@@ -624,23 +854,17 @@ export class CanvasRenderer implements GameRenderer {
         motion?.player.alpha ?? 1,
       );
     }
-    if (!motion && view.preview.valid && path.length && !view.preview.exits) {
-      const p = this.center(view.preview.endpoint);
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(p.x - c * 0.44, p.y - c * 0.44, c * 0.88, c * 0.88);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = view.preview.damage ? '#ff654d' : '#f4ffdb';
-      ctx.setLineDash([4, 4]);
-      ctx.lineDashOffset = this.reducedMotion.matches ? 0 : -time * 0.012;
-      ctx.stroke();
-      ctx.restore();
-    }
-    if (!motion) {
+    if (!motion && !entry) {
       this.drawTutorial(time);
-      // Danger remains the topmost overlay when it overlaps tutorial guidance.
+      // Danger remains above tutorial guidance; the endpoint count stays readable.
       this.drawInspectedThreats(time);
+      if (view.preview.valid && !view.preview.exits && path.length) {
+        const endpoint = state.entities[path[path.length - 1]];
+        this.drawEndpointCount(view.preview.endpoint, view.preview.chainCount,
+          endpoint && isElite(endpoint) ? 0.62 : 0.44);
+      }
     }
+    if (entry) this.drawLevelEntry(entry);
   }
 
   dispose(): void {
@@ -649,8 +873,11 @@ export class CanvasRenderer implements GameRenderer {
     this.lifecycle.abort();
     this.view = null;
     this.motion = null;
+    this.levelEntry = null;
     this.spriteTrail = [];
     this.inspectedThreatCells = [];
+    this.endpointNumber = null;
+    this.entryCard = null;
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 }

@@ -1,7 +1,8 @@
-import { getLevel } from '../content/levels';
+import { getRunLevel } from '../content/levels';
 import { emptyCells, isPlayable, settleBoard } from './board';
+import { attackOffsets, canOpenExit, isElite, threatens } from './combat';
+import { comboBonus } from './items';
 import {
-  cardinalAdjacent,
   samePoint,
   type Creep,
   type GameEvent,
@@ -14,16 +15,20 @@ import {
 } from './model';
 import { inspectPath } from './path';
 import { nextRandom } from './random';
+import { shortChainThreshold } from './rage';
 
-export function rewardForKills(kills: number): number {
-  if (kills >= 25) return 5;
-  if (kills >= 20) return 3;
-  if (kills >= 15) return 2;
-  return kills >= 10 ? 1 : 0;
+export function rewardForChain(chainCount: number): number {
+  if (chainCount >= 25) return 5;
+  if (chainCount >= 20) return 3;
+  if (chainCount >= 15) return 2;
+  return chainCount >= 10 ? 1 : 0;
 }
 
+/** Retained for callers using the original reward-tier helper name. */
+export const rewardForKills = rewardForChain;
+
 export function attackCells(state: RunState): Point[] {
-  const level = getLevel(state.levelId);
+  const level = getRunLevel(state);
   const cells = new Map<string, Point>();
   for (const entity of Object.values(state.entities)) {
     if (
@@ -33,13 +38,8 @@ export function attackCells(state: RunState): Point[] {
       entity.attackActiveFromTurn > state.turn + 1
     )
       continue;
-    for (const [dx, dy] of [
-      [0, -1],
-      [1, 0],
-      [0, 1],
-      [-1, 0],
-    ]) {
-      const pos = { x: entity.pos.x + dx, y: entity.pos.y + dy };
+    for (const offset of attackOffsets(entity)) {
+      const pos = { x: entity.pos.x + offset.x, y: entity.pos.y + offset.y };
       if (isPlayable(level, pos)) cells.set(`${pos.x},${pos.y}`, pos);
     }
   }
@@ -57,6 +57,7 @@ function cloneRun(state: RunState): RunState {
       ]),
     ),
     pendingDrops: state.pendingDrops.map((drop) => ({ ...drop })),
+    ...(state.inventory ? { inventory: [...state.inventory] } : {}),
     rng: { ...state.rng },
     build: {
       ...state.build,
@@ -71,28 +72,18 @@ function cloneRun(state: RunState): RunState {
   };
 }
 
-function enrage(
+function enrageShortChain(
   state: RunState,
-  wasExitOpen: boolean,
   actionTurn: number,
   events: GameEvent[],
 ): void {
-  const policy = getLevel(state.levelId).rage;
-  let count: number;
-  if (policy.activation === 'exit-open-at-turn-start') {
-    if (!wasExitOpen) return;
-    count = policy.newAngryPerTurn;
-  } else {
-    if (actionTurn < policy.startTurn) return;
-    count = state.exitUnlocked
-      ? policy.newAngryAfterExitOpened
-      : policy.newAngryPerTurn;
-  }
+  const count = (state.shortChainCount ?? 0) >= 3 ? 2 : 1;
   const candidates = Object.values(state.entities)
     .filter(
       (entity): entity is Creep =>
         entity.kind === 'creep' &&
         entity.mood === 'calm' &&
+        !isElite(entity) &&
         entity.bornTurn < actionTurn,
     )
     .sort((a, b) => a.id.localeCompare(b.id));
@@ -128,6 +119,7 @@ function spawnRewards(
       .filter(
         (entity): entity is Creep =>
           entity.kind === 'creep' &&
+          !isElite(entity) &&
           !samePoint(entity.pos, state.player.pos),
       )
       .sort((a, b) => a.id.localeCompare(b.id));
@@ -176,8 +168,14 @@ export function resolveTurn(
   const state = cloneRun(original);
   const actionTurn = original.turn + 1;
   const events: GameEvent[] = [];
+  if (comboBonus(state) > 0 && command.targets.some((id) => id !== 'exit')) {
+    const [item] = state.inventory!.splice(state.selectedComboIndex!, 1);
+    events.push({ type: 'item-consumed', item, reason: 'combo' });
+  }
+  delete state.selectedComboIndex;
   const preview: TurnPreview = {
     valid: true,
+    chainCount: path.chainCount,
     kills: path.kills,
     collectedGems: path.collectedGems,
     rewardValue: 0,
@@ -194,6 +192,7 @@ export function resolveTurn(
     const entity = state.entities[id];
     if (entity.kind === 'creep') {
       events.push({ type: 'creep-killed', entity });
+      if (isElite(entity)) state.eliteKills = (state.eliteKills ?? 0) + 1;
     } else events.push({ type: 'gem-collected', entity });
     delete state.entities[id];
   }
@@ -205,7 +204,7 @@ export function resolveTurn(
   state.player.pos = path.endpoint;
   state.killCount += path.kills;
   state.carriedGems += path.collectedGems;
-  if (!state.exitUnlocked && state.killCount >= getLevel(state.levelId).goal) {
+  if (!state.exitUnlocked && canOpenExit(state)) {
     state.exitUnlocked = true;
     events.push({ type: 'exit-opened' });
   }
@@ -217,6 +216,10 @@ export function resolveTurn(
     return { ok: true, state, events, preview };
   }
 
+  const isShortChain =
+    path.chainCount < shortChainThreshold(getRunLevel(state));
+  if (isShortChain) state.shortChainCount = (state.shortChainCount ?? 0) + 1;
+
   // Attacks use surviving enemies' pre-gravity positions and their prior active state.
   const attacks = Object.values(state.entities)
     .filter(
@@ -225,13 +228,21 @@ export function resolveTurn(
         entity.mood === 'angry' &&
         entity.attackActiveFromTurn !== null &&
         entity.attackActiveFromTurn <= actionTurn &&
-        cardinalAdjacent(entity.pos, state.player.pos),
+        threatens(entity, state.player.pos),
     )
     .sort((a, b) => b.damage - a.damage || a.id.localeCompare(b.id));
   preview.attackers = attacks.map((creep) => creep.id);
+  const shieldIndex = state.inventory?.indexOf('shield') ?? -1;
+  const shieldBlocked = attacks.length > 0 && shieldIndex >= 0;
+  if (shieldBlocked) {
+    state.inventory!.splice(shieldIndex, 1);
+    events.push({ type: 'item-consumed', item: 'shield', reason: 'shield' });
+  }
   for (const attacker of attacks) {
-    let blocked = false;
+    let blocked = shieldBlocked;
+    if (blocked) preview.blocked += 1;
     for (const effect of state.build.effects) {
+      if (blocked) break;
       if (effect.type !== 'block-creep-attack') continue;
       const runtime = state.equipmentRuntime[effect.effectId];
       if (runtime && runtime.remainingCharges > 0) {
@@ -261,12 +272,14 @@ export function resolveTurn(
     return { ok: true, state, events, preview };
   }
 
-  preview.rewardValue = rewardForKills(path.kills);
+  if (isShortChain) enrageShortChain(state, actionTurn, events);
+
+  preview.rewardValue = rewardForChain(path.chainCount);
   if (preview.rewardValue > 0) {
     for (const effect of state.build.effects) {
       if (
         effect.type === 'chain-reward-flat-bonus' &&
-        path.kills >= effect.minKills
+        path.chainCount >= effect.minKills
       )
         preview.rewardValue += effect.bonusValue;
     }
@@ -277,12 +290,11 @@ export function resolveTurn(
     actionTurn,
     events,
   );
-  if (!state.exitUnlocked && state.killCount >= getLevel(state.levelId).goal) {
+  if (!state.exitUnlocked && canOpenExit(state)) {
     state.exitUnlocked = true;
     events.push({ type: 'exit-opened' });
   }
   settleBoard(state, actionTurn, events);
-  enrage(state, original.exitUnlocked, actionTurn, events);
   return { ok: true, state, events, preview };
 }
 
@@ -300,6 +312,7 @@ export function previewTurn(
   return {
     valid: false,
     reason: result.error,
+    chainCount: 0,
     kills: 0,
     collectedGems: 0,
     rewardValue: 0,

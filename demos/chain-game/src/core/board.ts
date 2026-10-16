@@ -1,4 +1,5 @@
-import { getLevel } from '../content/levels';
+import { getLevel, getRunLevel } from '../content/levels';
+import { isElite } from './combat';
 import {
   samePoint,
   type ColorId,
@@ -11,6 +12,7 @@ import {
 } from './model';
 import { entityAt } from './path';
 import { nextRandom, seedStreams } from './random';
+import { rageRefillChance } from './rage';
 
 export function isPlayable(level: LevelDefinition, pos: Point): boolean {
   return (
@@ -28,13 +30,13 @@ export function newCreep(
   bornTurn: number,
   color?: ColorId,
 ): Creep {
-  const level = getLevel(state.levelId);
+  const level = getRunLevel(state);
   if (!color) {
     const random = nextRandom(state.rng.board);
     state.rng.board = random.state;
     color = level.colors[Math.floor(random.value * level.colors.length)];
   }
-  return {
+  const creep: Creep = {
     id: `creep-${state.nextEntityId++}`,
     kind: 'creep',
     pos: { ...pos },
@@ -45,6 +47,31 @@ export function newCreep(
     attackActiveFromTurn: null,
     damage: 1,
   };
+  if (
+    level.elite &&
+    (state.eliteKills ?? 0) > 0 &&
+    !Object.values(state.entities).some(isElite)
+  ) {
+    const random = nextRandom(state.rng.board);
+    state.rng.board = random.state;
+    if (random.value < level.elite.respawnChance) {
+      creep.archetypeId = 'elite';
+      creep.mood = 'angry';
+      creep.attackActiveFromTurn = bornTurn + 1;
+    }
+  }
+  // Only refill births can become angry at random. Keep the board stream's
+  // colour/elite rolls independent of ordinary anger rolls.
+  const angryChance = bornTurn > 0 && !isElite(creep) ? rageRefillChance(state) : 0;
+  if (angryChance > 0) {
+    const random = nextRandom(state.rng.rage);
+    state.rng.rage = random.state;
+    if (random.value < angryChance) {
+      creep.mood = 'angry';
+      creep.attackActiveFromTurn = bornTurn + 1;
+    }
+  }
+  return creep;
 }
 
 export function createRun(
@@ -62,6 +89,7 @@ export function createRun(
   const state: RunState = {
     runId,
     levelId,
+    ...(level.generation ? { levelSnapshot: structuredClone(level) } : {}),
     rulesVersion: 'prototype-v1',
     contentVersion: '1',
     revision: 0,
@@ -70,10 +98,12 @@ export function createRun(
     player: { pos: { ...level.playerStart }, hp: health, maxHp: 3 },
     entities: {},
     killCount: 0,
+    eliteKills: 0,
+    shortChainCount: 0,
     carriedGems: 0,
     pendingDrops: [],
     exitUnlocked: false,
-    rng: seedStreams(seed),
+    rng: seedStreams(level.generation?.stageSeed ?? seed),
     nextEntityId: 1,
     build: {
       ...build,
@@ -107,16 +137,24 @@ export function createRun(
       state.entities[creep.id] = creep;
     }
   }
+  if (level.elite) {
+    const guardian = entityAt(state, level.elite.initialPos);
+    if (guardian?.kind === 'creep') {
+      guardian.archetypeId = 'elite';
+      guardian.mood = 'angry';
+      guardian.attackActiveFromTurn = 1;
+    }
+  }
   return state;
 }
 
-/** Operates only on the resolver's private copy. Gems and the player split gravity into segments. */
+/** Operates on the resolver's private copy. Gems, elites and the player split gravity. */
 export function settleBoard(
   state: RunState,
   actionTurn: number,
   events: GameEvent[],
 ): void {
-  const level = getLevel(state.levelId);
+  const level = getRunLevel(state);
   for (let x = 0; x < level.width; x += 1) {
     let segment: Point[] = [];
     const settleSegment = () => {
@@ -147,10 +185,12 @@ export function settleBoard(
     };
     for (let y = 0; y <= level.height; y += 1) {
       const pos = { x, y };
+      const entity = entityAt(state, pos);
       if (
         !isPlayable(level, pos) ||
         samePoint(pos, state.player.pos) ||
-        entityAt(state, pos)?.kind === 'gem'
+        entity?.kind === 'gem' ||
+        (entity !== undefined && isElite(entity))
       )
         settleSegment();
       else segment.push(pos);
@@ -159,7 +199,7 @@ export function settleBoard(
 }
 
 export function emptyCells(state: RunState): Point[] {
-  const level = getLevel(state.levelId);
+  const level = getRunLevel(state);
   const cells: Point[] = [];
   for (let y = 0; y < level.height; y += 1) {
     for (let x = 0; x < level.width; x += 1) {
