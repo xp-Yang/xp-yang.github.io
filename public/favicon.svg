@@ -1,5 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
   <title>YANG</title>
-  <rect width="64" height="64" rx="14" fill="#080808"/>
-  <path d="M10 10h12l10 17 10-17h12L38 37v17H26V37Z" fill="#f5f5f5"/>
+  <path d="M10 10h12l10 17 10-17h12L38 37v17H26V37Z" fill="#ff9f44"/>
 </svg>

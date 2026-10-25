@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     images: ['/og.png'],
   },
   icons: {
-    icon: { url: '/favicon.svg?v=y-1', type: 'image/svg+xml' },
+    icon: { url: '/favicon.svg?v=y-2', type: 'image/svg+xml' },
   },
 };
 
