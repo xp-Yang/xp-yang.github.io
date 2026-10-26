@@ -11,7 +11,7 @@ import {
   type RunState,
 } from '../core';
 import type { TurnPresenter } from './contracts';
-import type { TurnAudio } from './game-audio';
+import { slashLeadSeconds, type TurnAudio } from './game-audio';
 import {
   DAMAGE_FEEDBACK_TIMING,
   type TurnDamageFeedback,
@@ -107,6 +107,7 @@ interface Timeline {
   routeMotionEnd: number;
   routeRecoveryEnd: number;
   recoveryEnd: number;
+  deathAt: number;
   rewardsAt: number;
   fallAt: number;
   duration: number;
@@ -271,6 +272,11 @@ function buildTimeline(
         Math.max(DAMAGE_FEEDBACK_TIMING.durationMs, SAMURAI_CLIPS.hurt.durationMs)
       : 0,
   );
+  const deathAt = recoveryEnd +
+    (damageHits.length > 0
+      ? (damageHits.length - 1) * DAMAGE_FEEDBACK_TIMING.hitStaggerMs +
+        SAMURAI_CLIPS.hurt.durationMs
+      : 0);
   const rewardsAt = recoveryEnd + retaliationDuration;
   const crushedByGem = new Map(
     events.flatMap((event) => event.type === 'creep-crushed'
@@ -382,7 +388,9 @@ function buildTimeline(
       ? fallAt +
         Math.max(0, ...falls.map((fall) => fall.start + fall.duration)) +
         TIMING.landingMs
-      : Math.max(rewardsAt + TIMING.exitFadeMs, fruitCutsEnd);
+      : after.status === 'dead'
+        ? Math.max(deathAt + TIMING.deathDurationMs, fruitCutsEnd)
+        : Math.max(rewardsAt + TIMING.exitFadeMs, fruitCutsEnd);
   return {
     before,
     after,
@@ -402,6 +410,7 @@ function buildTimeline(
     routeMotionEnd,
     routeRecoveryEnd,
     recoveryEnd,
+    deathAt,
     rewardsAt,
     fallAt,
     duration,
@@ -485,7 +494,7 @@ function addFruitCut(
 }
 
 function spriteAt(timeline: Timeline, elapsed: number): SamuraiPose {
-  const { hops, initialFacing, finalFacing } = timeline;
+  const { hops, initialFacing, finalFacing, after } = timeline;
   if (elapsed < timeline.startEnd)
     return {
       clip: 'start',
@@ -551,6 +560,13 @@ function spriteAt(timeline: Timeline, elapsed: number): SamuraiPose {
   if (hitIndex >= 0 && hurtAge >= 0 && hurtAge < SAMURAI_CLIPS.hurt.durationMs)
     return { clip: 'hurt', elapsedMs: hurtAge, facing: finalFacing };
 
+  if (after.status === 'dead' && elapsed >= timeline.deathAt)
+    return {
+      clip: 'hurt',
+      elapsedMs: Math.max(0, SAMURAI_CLIPS.hurt.durationMs - 0.001),
+      facing: finalFacing,
+    };
+
   return {
     clip: 'idle',
     elapsedMs: Math.max(0, elapsed - timeline.recoveryEnd),
@@ -568,7 +584,8 @@ function frameAt(timeline: Timeline, elapsed: number): MotionFrame {
         pos: after.player.pos,
         scaleX: 1,
         scaleY: 1,
-        alpha: after.status === 'escaped' ? 0 : 1,
+        alpha: after.status === 'playing' ? 1 : 0,
+        rotation: 0,
         sprite: { clip: 'idle', elapsedMs: 0, facing: timeline.finalFacing },
       },
       entities: {},
@@ -744,14 +761,59 @@ function frameAt(timeline: Timeline, elapsed: number): MotionFrame {
     after.status === 'escaped' && elapsed >= timeline.recoveryEnd
       ? 1 - clamp((elapsed - timeline.recoveryEnd) / TIMING.exitFadeMs)
       : 1;
+  let deathAlpha = 1;
+  let playerScaleX = 1;
+  let playerScaleY = 1;
+  let playerRotation = 0;
+  if (after.status === 'dead' && elapsed >= timeline.deathAt) {
+    phase = 'death';
+    const deathAge = elapsed - timeline.deathAt;
+    const fall = smooth(clamp(deathAge / TIMING.deathFallMs));
+    const recoil = Math.sin(clamp(deathAge / 180) * Math.PI) * 0.08;
+    playerRotation = fall * Math.PI * 0.5 * (timeline.finalFacing === 'right' ? -1 : 1);
+    playerScaleX = 1 + recoil;
+    playerScaleY = 1 - recoil;
+    playerPos = { ...playerPos, y: playerPos.y + fall * 0.16 };
+    deathAlpha = 1 - clamp(
+      (deathAge - TIMING.deathFadeDelayMs) / TIMING.deathFadeMs,
+    );
+    const dustAge = deathAge - TIMING.deathFallMs;
+    if (dustAge >= 0 && dustAge < 340) {
+      const progress = dustAge / 340;
+      for (let index = 0; index < 12; index += 1) {
+        const direction = index % 2 === 0 ? -1 : 1;
+        const speed = 0.22 + (index % 4) * 0.08;
+        particles.push({
+          pos: {
+            x: playerPos.x + direction * speed * progress,
+            y: playerPos.y + 0.25 - Math.sin(progress * Math.PI) * (0.12 + index * 0.012),
+          },
+          size: 0.07 * (1 - progress * 0.55),
+          rotation: progress * (2.4 + index * 0.13),
+          color: index % 3 === 0 ? '#b45b62' : '#60465a',
+          alpha: 1 - progress,
+        });
+      }
+      if (dustAge < 170) {
+        const pulse = dustAge / 170;
+        impacts.push({
+          pos: { x: playerPos.x, y: playerPos.y + 0.24 },
+          radius: 0.2 + pulse * 0.55,
+          alpha: (1 - pulse) * 0.72,
+          color: '#b95c67',
+        });
+      }
+    }
+  }
   return {
     phase,
     state,
     player: {
       pos: playerPos,
-      scaleX: 1,
-      scaleY: 1,
-      alpha: escapeAlpha,
+      scaleX: playerScaleX,
+      scaleY: playerScaleY,
+      alpha: escapeAlpha * deathAlpha,
+      rotation: playerRotation,
       sprite: spriteAt(timeline, elapsed),
     },
     entities,
@@ -808,12 +870,17 @@ export class AnimatedTurnPresenter implements TurnPresenter {
       let finished = false;
       let startedAt: number | null = null;
       const contacts = timeline.hops.filter((hop) => hop.target);
+      const slashContacts = contacts.filter(
+        (hop) => hop.target?.kind === 'creep' && hop.attackClip,
+      );
       let nextContact = 0;
+      let nextSlash = 0;
       let nextLanding = 0;
       let nextDamage = 0;
       let shieldPending = events.some(
         (event) => event.type === 'item-consumed' && event.reason === 'shield',
       );
+      let deathPending = after.status === 'dead';
       const finish = () => {
         if (finished) return;
         finished = true;
@@ -864,6 +931,28 @@ export class AnimatedTurnPresenter implements TurnPresenter {
               try { this.onShield?.(); } catch { /* Disposed inventory HUD. */ }
             }
           }
+          if (deathPending && elapsed >= timeline.deathAt) {
+            deathPending = false;
+            if (elapsed - timeline.deathAt < 100) this.audio?.death();
+          }
+          let latestSlash: Hop | undefined;
+          while (nextSlash < slashContacts.length) {
+            const hop = slashContacts[nextSlash];
+            const trigger = hop.impact -
+              slashLeadSeconds(hop.speed, hop.attackClip === 'slam') * 1000;
+            if (trigger > elapsed) break;
+            latestSlash = hop;
+            nextSlash += 1;
+          }
+          if (latestSlash) {
+            const trigger = latestSlash.impact -
+              slashLeadSeconds(latestSlash.speed, latestSlash.attackClip === 'slam') * 1000;
+            if (elapsed - trigger < 100)
+              this.audio?.slash(
+                latestSlash.speed,
+                latestSlash.attackClip === 'slam',
+              );
+          }
           // Consume contact boundaries once, independent of render/frame sampling.
           // A stalled frame discards old contacts instead of producing a burst.
           let latest: Hop | undefined;
@@ -873,8 +962,6 @@ export class AnimatedTurnPresenter implements TurnPresenter {
           if (latest && elapsed - latest.impact < 100) {
             if (latest.target?.kind === 'gem')
               this.audio?.gemPickup(latest.target.value * (before.gemMultiplier ?? 1));
-            else if (latest.attackClip)
-              this.audio?.slash(latest.speed, latest.attackClip === 'slam');
           }
           let landed: RewardDrop | undefined;
           while (nextLanding < timeline.rewardDrops.length &&

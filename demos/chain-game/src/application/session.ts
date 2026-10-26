@@ -6,6 +6,7 @@ import {
   type GameEvent,
   type LevelDefinition,
   type ItemKind,
+  type TurnResult,
 } from '../core';
 import { canOpenExit, isElite } from '../core/combat';
 import { isItemKind, itemComboBonus, MAX_ITEMS } from '../core/items';
@@ -125,22 +126,42 @@ export function getAvailableEndlessLevelIds(data: SessionData): string[] {
   return [...new Set(current ? [current, frontier] : [frontier])];
 }
 
-/** Shop stock is drawn once for an escaped run and survives refresh/reload. */
+/**
+ * Shop stock is drawn once per terminal run and survives refresh/reload.
+ * A failed run enters a recovery shop at 1 HP with all run-carried items gone.
+ */
 export function ensureShop(data: SessionData): SessionData {
-  if (data.run.status !== 'escaped' || getRunLevel(data.run).levelNumber === 1)
+  const escaped = data.run.status === 'escaped';
+  const dead = data.run.status === 'dead';
+  if (!escaped && !dead) return data;
+  if (escaped && getRunLevel(data.run).levelNumber === 1) return data;
+  if (data.shop?.runId === data.run.runId && (!dead || data.profile.health > 0))
     return data;
-  if (data.shop?.runId === data.run.runId) return data;
-  const nextLevelId = getNextSessionLevelId(data);
+  const nextLevelId = escaped ? getNextSessionLevelId(data) : data.run.levelId;
   if (!nextLevelId) return data;
-  let seed = (data.runSeed ^ 0xa511e9b3) >>> 0;
-  for (const character of data.run.runId)
+  let recovered = data;
+  if (dead) {
+    const run = {
+      ...data.run,
+      player: { ...data.run.player, hp: 1 },
+      inventory: [] as ItemKind[],
+    };
+    delete run.selectedComboIndex;
+    recovered = {
+      ...data,
+      profile: { ...data.profile, health: 1, inventory: [] as ItemKind[] },
+      run,
+    };
+  }
+  let seed = (recovered.runSeed ^ (dead ? 0x6d2b79f5 : 0xa511e9b3)) >>> 0;
+  for (const character of recovered.run.runId)
     seed = Math.imul(seed ^ character.charCodeAt(0), 16777619) >>> 0;
   const drawn = drawShopOffers(seed);
   return {
-    ...data,
-    revision: data.revision + 1,
+    ...recovered,
+    revision: recovered.revision + 1,
     shop: {
-      runId: data.run.runId,
+      runId: recovered.run.runId,
       nextLevelId,
       ...drawn,
       purchased: [],
@@ -155,7 +176,7 @@ export function getShopOfferState(
   id: ShopOfferId,
 ): { disabled: boolean; reason?: string } {
   const shop = data.shop;
-  if (data.run.status !== 'escaped' || !shop || shop.runId !== data.run.runId || shop.closed)
+  if (!shop || shop.runId !== data.run.runId || shop.closed)
     return { disabled: true, reason: '商店已关闭' };
   if (!shop.offers.includes(id)) return { disabled: true, reason: '商品不在本次货架中' };
   if (shop.purchased.includes(id)) return { disabled: true, reason: '已购买' };
@@ -201,7 +222,7 @@ export function buyShopOffer(data: SessionData, id: ShopOfferId): SessionData {
 export function refreshShop(data: SessionData): SessionData {
   data = ensureShop(data);
   const shop = data.shop;
-  if (!shop || shop.closed || shop.runId !== data.run.runId || data.run.status !== 'escaped')
+  if (!shop || shop.closed || shop.runId !== data.run.runId)
     throw new Error('商店已关闭。');
   if (data.profile.bankedGems < SHOP_REFRESH_PRICE) throw new Error('刷新需要 5 宝石。');
   const drawn = drawShopOffers(shop.rng);
@@ -279,7 +300,7 @@ export function startLevel(
   const run = createRun(levelId, stageSeed, data.profile.health, runId);
   run.inventory = [...(data.profile.inventory ?? [])];
   run.gemMultiplier = data.nextGemMultiplier ?? 1;
-  return {
+  const advanced: SessionData = {
     ...data,
     revision: data.revision + 1,
     run,
@@ -289,6 +310,7 @@ export function startLevel(
     shop: undefined,
     nextGemMultiplier: undefined,
   };
+  return advanced;
 }
 
 export function commitPath(
@@ -302,8 +324,22 @@ export function commitPath(
     revision: data.run.revision,
     targets,
   });
+  return commitResolvedTurn(data, targets, result);
+}
+
+/** Apply a trusted turn result, including one cached by the async previewer. */
+export function commitResolvedTurn(
+  data: SessionData,
+  targets: readonly string[],
+  result: TurnResult,
+):
+  | { ok: true; data: SessionData; events: GameEvent[] }
+  | { ok: false; error: string } {
   if (!result.ok) return result;
-  const run = result.state;
+  const run = {
+    ...result.state,
+    inventory: [...(result.state.inventory ?? [])],
+  };
   let profile: Profile = {
     ...data.profile,
     health: run.player.hp,
@@ -331,18 +367,21 @@ export function commitPath(
       endless = endlessProgress({ ...data, profile });
     }
   }
-  return {
+  const advanced: { ok: true; data: SessionData; events: GameEvent[] } = {
     ok: true,
-    data: ensureShop({
+    data: {
       ...data,
       revision: data.revision + 1,
       run,
       profile,
-      endless,
+      ...(endless ? { endless } : {}),
       actions: [...data.actions, [...targets]],
-    }),
+    },
     events: result.events,
   };
+  return run.status === 'escaped'
+    ? { ...advanced, data: ensureShop(advanced.data) }
+    : advanced;
 }
 
 /** Adopt new metadata and fruit palettes without replaying or resetting old runs. */
@@ -369,6 +408,18 @@ export function normalizeSessionData(data: SessionData): SessionData {
     }
   }
   return changed ? { ...data, run: { ...data.run, entities } } : data;
+}
+
+/** Parse untrusted imported JSON through the same checks as local storage. */
+export function parseImportedSession(raw: string): SessionData | undefined {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isSessionData(parsed)) return undefined;
+    const normalized = normalizeSessionData(parsed);
+    return isSessionData(normalized) ? normalized : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Validate persisted state before allowing it to reach input or rendering. */
@@ -563,8 +614,15 @@ export function isSessionData(value: unknown): value is SessionData {
     const level = getRunLevel(run);
     if (data.shop !== undefined) {
       const shop = data.shop;
-      if (!record(shop) || run.status !== 'escaped' || level.levelNumber < 2 ||
-          shop.runId !== run.runId || shop.nextLevelId !== getNextSessionLevelId(data) ||
+      const recovery = run.status === 'dead';
+      const expectedNextLevelId = recovery
+        ? run.levelId
+        : getNextSessionLevelId(data);
+      if (!record(shop) || (!recovery && run.status !== 'escaped') ||
+          (run.status === 'escaped' && level.levelNumber < 2) ||
+          shop.runId !== run.runId || !expectedNextLevelId ||
+          shop.nextLevelId !== expectedNextLevelId ||
+          (recovery && profile.health === 0) ||
           !Array.isArray(shop.offers) || shop.offers.length !== 3 ||
           !shop.offers.every(isShopOfferId) || new Set(shop.offers).size !== 3 ||
           !Array.isArray(shop.purchased) || !shop.purchased.every(isShopOfferId) ||
@@ -574,8 +632,15 @@ export function isSessionData(value: unknown): value is SessionData {
           !nonnegativeInteger(shop.refreshCount) || typeof shop.closed !== 'boolean')
         return false;
     }
+    if (
+      run.status === 'dead' &&
+      ((profile.health === 0 && data.shop !== undefined) ||
+       (profile.health > 0 && data.shop === undefined))
+    )
+      return false;
     if (data.nextGemMultiplier !== undefined &&
-        (run.status !== 'escaped' || !data.shop)) return false;
+        ((run.status !== 'escaped' && run.status !== 'dead') ||
+         !data.shop)) return false;
     const eliteKills = run.eliteKills ?? 0;
     if (
       (run.eliteKills !== undefined && !nonnegativeInteger(run.eliteKills)) ||
@@ -611,7 +676,7 @@ export function isSessionData(value: unknown): value is SessionData {
       )
         return false;
     } else if (!inside(run.player.pos)) return false;
-    if ((run.status === 'dead') !== (profile.health === 0)) return false;
+    if (run.status !== 'dead' && profile.health === 0) return false;
     if (
       run.status === 'dead' &&
       (run.carriedGems !== 0 || run.pendingDrops.length > 0)
@@ -714,7 +779,7 @@ function validLevelSnapshot(value: unknown, levelId: string): value is LevelDefi
     return false;
   for (const [y, row] of value.initialRows.entries()) {
     if (typeof row !== 'string' || row.length !== 7) return false;
-    for (const [x, code] of [...row].entries()) {
+    for (const [x, code] of row.split('').entries()) {
       if (x === 3 && y === 6 ? code !== '.' : !palette.includes(symbols[code]))
         return false;
     }

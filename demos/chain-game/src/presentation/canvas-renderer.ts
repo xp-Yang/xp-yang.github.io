@@ -18,7 +18,11 @@ import {
 } from './board-geometry';
 import { MOTION_TIMING, type MotionFrame, type EntityMotion } from './motion';
 import { SamuraiVisual } from './samurai-visual';
-import type { SamuraiFacing, SamuraiPose } from './samurai-sprites';
+import {
+  SAMURAI_GROUND_OFFSET_CELLS,
+  type SamuraiFacing,
+  type SamuraiPose,
+} from './samurai-sprites';
 import {
   LEVEL_ENTRY_TIMING,
   type LevelEntryFrame,
@@ -838,21 +842,36 @@ export class CanvasRenderer implements GameRenderer, LevelEntrySink {
         );
       }
     }
-    if (motion ? motion.player.alpha > 0 : state.status !== 'escaped') {
+    if (motion ? motion.player.alpha > 0 : state.status === 'playing') {
       const p = this.center(motion?.player.pos ?? state.player.pos);
       const sprite: SamuraiPose = motion?.player.sprite ?? {
         clip: 'idle',
         elapsedMs: this.reducedMotion.matches ? 0 : entry?.elapsed ?? time - this.idleStartedAt,
         facing: this.facing,
       };
-      this.samurai.draw(
-        ctx,
-        p,
-        c,
-        this.pixelRatio,
-        sprite,
-        motion?.player.alpha ?? 1,
-      );
+      if (motion) {
+        ctx.save();
+        ctx.translate(p.x, p.y + c * SAMURAI_GROUND_OFFSET_CELLS);
+        ctx.rotate(motion.player.rotation);
+        ctx.scale(motion.player.scaleX, motion.player.scaleY);
+        this.samurai.draw(
+          ctx,
+          { x: 0, y: -c * SAMURAI_GROUND_OFFSET_CELLS },
+          c,
+          this.pixelRatio,
+          sprite,
+          motion.player.alpha,
+        );
+        ctx.restore();
+      } else {
+        this.samurai.draw(
+          ctx,
+          p,
+          c,
+          this.pixelRatio,
+          sprite,
+        );
+      }
     }
     if (!motion && !entry) {
       this.drawTutorial(time);

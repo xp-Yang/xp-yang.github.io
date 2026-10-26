@@ -1,22 +1,49 @@
 /** Short, locally synthesized effects; no music, network requests or game RNG. */
+const ARCADE_COUNT_RATIOS = [
+  1, 1.12246, 1.25992, 1.49831, 1.68179,
+  2, 2.24492, 2.51984, 2.99661, 3.36359,
+] as const;
+const ARCADE_SLASH_CONTACT_SECONDS = 0.105;
+
+function slashRate(speed: number, heavy: boolean): number {
+  return (heavy ? 0.86 : 1) * (0.94 + Math.min(1, speed) * 0.12);
+}
+
+/** Call the slash buffer this far before the authored contact frame. */
+export function slashLeadSeconds(speed: number, heavy: boolean): number {
+  return ARCADE_SLASH_CONTACT_SECONDS / slashRate(speed, heavy);
+}
+
 export interface TurnAudio {
   slash(speed: number, heavy: boolean): void;
   gemPickup(value: number): void;
   gemLand(value: number): void;
   hurt(): void;
+  death(): void;
   shield?(): void;
   stop(): void;
+}
+
+interface PendingVoice {
+  buffer: AudioBuffer;
+  rate: number;
+  volume: number;
+  queuedAt: number;
 }
 
 export class GameAudio implements TurnAudio {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private voices = new Set<AudioBufferSourceNode>();
-  private countBuffer: AudioBuffer | null = null;
+  private pendingVoices: PendingVoice[] = [];
+  private resumePending = false;
+  private outputReadyAt = 0;
+  private countBuffers: AudioBuffer[] = [];
   private slashBuffer: AudioBuffer | null = null;
   private pickupBuffer: AudioBuffer | null = null;
   private landingBuffer: AudioBuffer | null = null;
   private hurtBuffer: AudioBuffer | null = null;
+  private deathBuffer: AudioBuffer | null = null;
   private shieldBuffer: AudioBuffer | null = null;
 
   /** Must be called directly from a pointer/key gesture (including mobile). */
@@ -26,11 +53,15 @@ export class GameAudio implements TurnAudio {
         this.stop();
         this.context = null;
         this.master = null;
-        this.countBuffer = null;
+        this.pendingVoices = [];
+        this.resumePending = false;
+        this.outputReadyAt = 0;
+        this.countBuffers = [];
         this.slashBuffer = null;
         this.pickupBuffer = null;
         this.landingBuffer = null;
         this.hurtBuffer = null;
+        this.deathBuffer = null;
         this.shieldBuffer = null;
       }
       if (!this.context) {
@@ -42,29 +73,59 @@ export class GameAudio implements TurnAudio {
         this.master = context.createGain();
         this.master.gain.value = 0.55;
         this.master.connect(context.destination);
-        this.countBuffer = this.createBuffer(0.135, (t) => {
-          // A rounded wooden/plucked tick, with a bright but short attack.
-          const fundamental = 610;
-          const phase = 2 * Math.PI * fundamental * t;
-          const attack = Math.min(1, t / 0.0018);
-          return attack * (
-            Math.sin(phase) * Math.exp(-t * 37) * 0.48 +
-            Math.sin(phase * 2.76) * Math.exp(-t * 73) * 0.19 +
-            Math.sin(phase * 5.4) * Math.exp(-t * 130) * 0.08
-          );
+        this.outputReadyAt = context.currentTime + 0.04;
+        // Resume while the initiating gesture is still active, before buffer synthesis.
+        this.resumeContext();
+        this.primeOutput();
+        const rawCountBuffers = ARCADE_COUNT_RATIOS.map((ratio, step) => {
+          let countNoiseState = 0;
+          let countRandomState = (0x3a91 + step * 0x9e37) >>> 0;
+          return this.createBuffer(0.18, (t) => {
+            // A "arcade rush": bright pluck, upper partial and sub-octave chip.
+            countRandomState = (Math.imul(countRandomState, 1664525) + 1013904223) >>> 0;
+            const noise = countRandomState / 0x80000000 - 1;
+            countNoiseState += (noise - countNoiseState) * 0.18;
+            const attack = Math.min(1, t / 0.0012);
+            const phase = 2 * Math.PI * 640 * ratio * t;
+            return attack * (
+              Math.sin(phase) * Math.exp(-t * 42) +
+              Math.sin(phase * 2.03) * Math.exp(-t * 70) * 0.42 +
+              Math.sin(phase * 0.5) * Math.exp(-t * 26) * 0.2 +
+              noise * Math.exp(-t * 145) * 0.24
+            );
+          });
         });
-        let previousNoise = 0;
-        let randomState = 0x5a17;
-        this.slashBuffer = this.createBuffer(0.185, (t) => {
-          // Deterministic noise avoids consuming either gameplay random stream.
-          randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0;
-          const noise = randomState / 0x80000000 - 1;
-          const high = noise - previousNoise * 0.72;
-          previousNoise = noise;
-          const envelope = Math.min(1, t / 0.0015) * Math.exp(-t * 37);
-          const body = Math.sin(2 * Math.PI * (170 * t - 310 * t * t));
-          return (high * 0.34 + body * Math.exp(-t * 50) * 0.48) * envelope;
+        const countGain = this.gainForPeak(rawCountBuffers, 0.89);
+        this.countBuffers = rawCountBuffers.map((buffer) =>
+          this.shapeBuffer(buffer, countGain),
+        );
+        let slashLowState = 0;
+        let slashAirState = 0;
+        let slashRandomState = 0x6c2d;
+        this.slashBuffer = this.createBuffer(0.64, (t) => {
+          // A "arcade rush": high-speed whoosh, rising chirp and a dry impact.
+          slashRandomState = (Math.imul(slashRandomState, 1664525) + 1013904223) >>> 0;
+          const noise = slashRandomState / 0x80000000 - 1;
+          slashLowState += (noise - slashLowState) * 0.19;
+          slashAirState += (noise - slashAirState) * 0.5;
+          const contact = ARCADE_SLASH_CONTACT_SECONDS;
+          const rise = Math.min(1, t / contact);
+          const whoosh = (noise - slashLowState) * rise * rise * (1 - rise) * 0.8;
+          const chirp = Math.sin(2 * Math.PI * (920 + 4600 * rise) * t) *
+            (1 - rise) * 0.18;
+          const impactAge = t - contact;
+          if (impactAge < 0) return whoosh + chirp;
+          const hit = (
+            Math.sin(2 * Math.PI * 118 * impactAge) * 0.68 +
+            Math.sin(2 * Math.PI * 240 * impactAge) * 0.28
+          ) * Math.exp(-impactAge * 27) +
+            (slashAirState - slashLowState) * Math.exp(-impactAge * 38) * 0.64;
+          return whoosh + chirp + hit;
         });
+        this.slashBuffer = this.shapeBuffer(
+          this.slashBuffer,
+          this.gainForPeak([this.slashBuffer], 0.89),
+        );
         const pickupFrequencies = [1050, 1312.5, 1575];
         this.pickupBuffer = this.createBuffer(0.28, (t) => {
           // A bright three-note crystal pickup, separate from the route ticks.
@@ -109,6 +170,18 @@ export class GameAudio implements TurnAudio {
           const grit = hurtNoise * Math.exp(-t * 38) * 0.42;
           return attack * (body + crack + grit);
         });
+        this.deathBuffer = this.createBuffer(0.68, (t) => {
+          // A descending airy fall ends in a hollow wooden collapse.
+          const fallPhase = 2 * Math.PI * (210 * t - 118 * t * t);
+          const fall = Math.sin(fallPhase) * Math.exp(-t * 4.2) * 0.34;
+          const collapseAge = t - 0.38;
+          const collapse = collapseAge < 0
+            ? 0
+            : (Math.sin(2 * Math.PI * 64 * collapseAge) +
+                Math.sin(2 * Math.PI * 96 * collapseAge) * 0.38) *
+              Math.exp(-collapseAge * 10) * 0.66;
+          return fall + collapse;
+        });
         this.shieldBuffer = this.createBuffer(0.32, (t) => {
           // Inharmonic partials give the one-turn block a bright metallic clang.
           const attack = Math.min(1, t / 0.0012);
@@ -120,23 +193,20 @@ export class GameAudio implements TurnAudio {
           return attack * (clang + crack);
         });
       }
-      if (this.context.state !== 'running' && this.context.state !== 'closed')
-        void this.context.resume().catch(() => {});
     } catch {
       // Audio availability never gates input, persistence or animation.
     }
   }
 
   count(chainCount: number): void {
-    // Ascending notes retain the count feeling without becoming piercing on long chains.
-    const semitones = Math.min(19, Math.max(0, chainCount - 1) * 0.85);
-    this.play(this.countBuffer, 2 ** (semitones / 12), 0.65);
+    // A uses a bright pentatonic climb and caps the rate for long chains.
+    const index = Math.min(ARCADE_COUNT_RATIOS.length - 1, Math.max(0, chainCount - 1));
+    this.play(this.countBuffers[index], 1, index === 0 ? 0.92 : 0.78);
   }
 
   slash(speed: number, heavy: boolean): void {
     // Impact stays on the authored contact frame; only timbre follows acceleration.
-    const rate = (heavy ? 0.86 : 1) * (0.94 + Math.min(1, speed) * 0.12);
-    this.play(this.slashBuffer, rate, heavy ? 0.92 : 0.8);
+    this.play(this.slashBuffer, slashRate(speed, heavy), heavy ? 0.86 : 0.92);
   }
 
   gemPickup(value: number): void {
@@ -154,11 +224,16 @@ export class GameAudio implements TurnAudio {
     this.play(this.hurtBuffer, 1, 1);
   }
 
+  death(): void {
+    this.play(this.deathBuffer, 1, 0.92);
+  }
+
   shield(): void {
     this.play(this.shieldBuffer, 1, 0.95);
   }
 
   stop(): void {
+    this.pendingVoices = [];
     for (const source of this.voices) {
       try { source.stop(); } catch { /* Already ended. */ }
     }
@@ -176,9 +251,86 @@ export class GameAudio implements TurnAudio {
     return buffer;
   }
 
+  private gainForPeak(buffers: readonly AudioBuffer[], peak: number): number {
+    let top = 0;
+    for (const buffer of buffers)
+      for (const sample of buffer.getChannelData(0))
+        top = Math.max(top, Math.abs(sample));
+    return top === 0 ? 1 : peak / top;
+  }
+
+  /** Match the normalized A1 preview and retain the same waveform proportions. */
+  private shapeBuffer(buffer: AudioBuffer, gain: number): AudioBuffer {
+    const data = buffer.getChannelData(0);
+    const saturation = Math.tanh(1.18);
+    for (let index = 0; index < data.length; index += 1)
+      data[index] = Math.tanh(data[index] * gain * 1.18) / saturation;
+    return buffer;
+  }
+
   private play(buffer: AudioBuffer | null, rate: number, volume: number): void {
     const context = this.context;
-    if (!context || context.state !== 'running' || !this.master || !buffer || document.hidden) return;
+    if (!context || context.state === 'closed' || !this.master || !buffer || document.hidden) return;
+    if (context.state !== 'running') {
+      this.pendingVoices.push({ buffer, rate, volume, queuedAt: performance.now() });
+      if (this.pendingVoices.length > 16) this.pendingVoices.shift();
+      this.resumeContext();
+      return;
+    }
+    this.flushPendingVoices();
+    this.startVoice(buffer, rate, volume);
+  }
+
+  private resumeContext(): void {
+    const context = this.context;
+    if (!context || context.state === 'closed') return;
+    if (context.state === 'running') {
+      this.flushPendingVoices();
+      return;
+    }
+    if (this.resumePending) return;
+    this.resumePending = true;
+    void context.resume().then(() => {
+      this.resumePending = false;
+      this.outputReadyAt = context.currentTime + 0.04;
+      this.flushPendingVoices();
+    }).catch(() => {
+      this.resumePending = false;
+      this.pendingVoices = [];
+    });
+  }
+
+  private primeOutput(): void {
+    const context = this.context;
+    if (!context || !this.master) return;
+    try {
+      const source = context.createBufferSource();
+      source.buffer = context.createBuffer(1, 1, context.sampleRate);
+      source.connect(this.master);
+      source.start();
+    } catch { /* The first real voice will report availability. */ }
+  }
+
+  private flushPendingVoices(): void {
+    if (!this.context || this.context.state !== 'running' || !this.master) return;
+    const now = performance.now();
+    const pending = this.pendingVoices.splice(0);
+    let replayIndex = 0;
+    for (const voice of pending) {
+      // Only flush from the gesture that created them, never a stale sound later.
+      if (now - voice.queuedAt <= 750)
+        this.startVoice(voice.buffer, voice.rate, voice.volume, replayIndex++ * 0.01);
+    }
+  }
+
+  private startVoice(
+    buffer: AudioBuffer,
+    rate: number,
+    volume: number,
+    delaySeconds = 0,
+  ): void {
+    const context = this.context;
+    if (!context || context.state !== 'running' || !this.master) return;
     try {
       // Bound polyphony for very fast pointer motion, while allowing short tails.
       if (this.voices.size >= 12) {
@@ -199,7 +351,7 @@ export class GameAudio implements TurnAudio {
         gain.disconnect();
       };
       this.voices.add(source);
-      source.start();
+      source.start(Math.max(context.currentTime + delaySeconds, this.outputReadyAt));
     } catch { /* An interrupted audio device must not interrupt a route. */ }
   }
 }

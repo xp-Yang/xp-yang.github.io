@@ -559,6 +559,9 @@ dialog::backdrop {
   line-height: 1.5;
   margin: 0;
 }
+.dialog-heading.titleless-heading {
+  justify-content: flex-end;
+}
 .help-content p,
 .dialog-copy {
   font-size: 12px;
@@ -613,12 +616,33 @@ dialog::backdrop {
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 12px;
+  gap: 16px;
+  padding: 16px 18px;
   border: 2px solid #354865;
   background: #111d31;
-  font-size: 12px;
+  font-size: 20px;
   color: #d7e5bb;
+}
+.menu-resource {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 112px;
+}
+.menu-resource-icon {
+  display: inline-grid;
+  place-items: center;
+  color: #f2a3a0;
+}
+.menu-resource-icon .hud-icon {
+  width: 38px;
+  height: 38px;
+}
+.menu-resource strong {
+  font-family: var(--font-pixel, monospace);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
 }
 .level-list {
   display: grid;
@@ -659,7 +683,7 @@ dialog::backdrop {
 }
 .level-option small {
   display: block;
-  margin-top: 8px;
+  margin: 0;
   color: #a5b9ca;
   font-size: 12px;
   line-height: 1.5;
@@ -671,6 +695,11 @@ dialog::backdrop {
   gap: 8px;
   align-items: center;
   margin-top: 24px;
+}
+.menu-file-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 @media (min-width: 761px) and (max-width: 1040px) {
@@ -1177,6 +1206,22 @@ dialog::backdrop {
 .shop-panel {
   min-width: 0;
 }
+.shop-recovery-status {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 2px solid #7d5b52;
+  background: #281c2a;
+  color: #f2c6ad;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.shop-recovery-status span:first-child {
+  color: #f5a7a0;
+}
 .shop-header {
   display: flex;
   align-items: center;
@@ -1315,6 +1360,44 @@ dialog::backdrop {
 #shop-next .hud-icon {
   width: 36px;
   height: 36px;
+}
+.shop-recovery-start {
+  min-width: min(216px, 100%);
+  min-height: 66px;
+  padding: 15px 18px;
+  font-size: 18px;
+  justify-content: center;
+}
+.shop-level-picker {
+  min-width: min(216px, 100%);
+}
+.shop-level-picker summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 66px;
+  padding: 15px 18px;
+  cursor: pointer;
+  list-style: none;
+  text-align: center;
+}
+.shop-level-picker summary::-webkit-details-marker {
+  display: none;
+}
+.shop-level-picker[open] summary {
+  border-color: #a6bb94;
+}
+.shop-level-picker .level-list {
+  width: min(520px, calc(100vw - 64px));
+  max-height: min(320px, 42vh);
+  margin: 12px auto 0;
+  overflow: auto;
+}
+.shop-empty-levels {
+  margin: 0;
+  color: #a9bed1;
+  font-size: 12px;
+  text-align: center;
 }
 .shop-refresh {
   display: inline-flex;

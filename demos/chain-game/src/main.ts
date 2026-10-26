@@ -7,15 +7,15 @@ import {
   isElite,
   LEVELS,
   legalTargets,
-  previewTurn,
   itemComboBonus,
   type GameEvent,
   type ItemKind,
+  type PathInspection,
   type RunState,
   type TurnPreview,
 } from './core';
 import {
-  commitPath,
+  commitResolvedTurn,
   getNextSessionLevelId,
   getAvailableEndlessLevelIds,
   isLevelUnlocked,
@@ -26,12 +26,14 @@ import {
   refreshShop,
   finishShop,
   getShopOfferState,
+  parseImportedSession,
   selectComboItem,
   teleportItem,
   type SessionData,
 } from './application/session';
+import { TurnPreviewClient } from './application/turn-preview-client';
 import { SHOP_OFFERS, SHOP_REFRESH_PRICE, type ShopOfferId } from './application/shop';
-import { editPath } from './application/path-editor';
+import { editPathWithInspection } from './application/path-editor';
 import { TutorialController, type TutorialView } from './application/tutorial';
 import { SessionStore } from './platform/storage';
 import { registerOfflineSupport } from './platform/offline';
@@ -72,10 +74,11 @@ let renderRequest = 0;
 let teleportIndex: number | null = null;
 let shopVisible = false;
 let inventorySignature = '';
-let cachedPreview: {
+const previewClient = new TurnPreviewClient();
+let cachedInspection: {
   run: RunState;
   path: readonly string[];
-  value: TurnPreview;
+  value: PathInspection;
 } | null = null;
 
 const icons = {
@@ -110,6 +113,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </section>
   </main>
   <dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-heading"><h2 id="dialog-title"></h2><button id="close-dialog" class="icon-button" aria-label="关闭">${icons.close}</button></div><div id="dialog-body"></div></dialog>
+  <input id="import-save-file" type="file" accept="application/json,.json" hidden />
 `;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
@@ -179,8 +183,12 @@ const input = attachInput(canvas, {
     !busy &&
     !dialog.open &&
     store.data.run.status === 'playing',
-  onDraggingChange: () => {
+  onDraggingChange: (dragging) => {
     // finishDrag clears its pointer synchronously: unlock before any repaint.
+    if (!dragging) {
+      markPerformance('path-released');
+      scheduleDeepPreview();
+    }
     updateControls();
     requestRender();
   },
@@ -195,7 +203,7 @@ const input = attachInput(canvas, {
 function handleTap(id: string | null): void {
   if (busy || dialog.open || store.data.run.status !== 'playing') return;
   if (teleportIndex !== null) {
-    if (id && id !== 'exit' && id !== 'player') void useTeleport(id);
+    if (id && id !== 'exit' && id !== 'player') void attemptTeleport(id);
     return;
   }
   if (id !== null) {
@@ -223,16 +231,19 @@ function inspectEntity(id: string | null): void {
   requestRender();
 }
 
-function changePath(command: Parameters<typeof editPath>[2]): boolean {
+function changePath(command: Parameters<typeof editPathWithInspection>[2]): boolean {
   if (busy || teleportIndex !== null || store.data.run.status !== 'playing') return false;
   inspectEntity(null);
-  const next = editPath(store.data.run, path, command);
-  if (next === path) return false;
-  if (next.length > path.length &&
-      store.data.run.entities[next[next.length - 1]]) {
-    audio.count(inspectPath(store.data.run, next).chainCount);
-  }
-  path = next;
+  const run = store.data.run;
+  const edit = editPathWithInspection(run, path, command);
+  if (!edit.changed) return false;
+  const wasExtension = edit.path.length > path.length;
+  path = edit.path;
+  cachedInspection = { run, path, value: edit.inspection };
+  const inspection = edit.inspection;
+  if (wasExtension && path.length > 0 && store.data.run.entities[path[path.length - 1]])
+    audio.count(inspection.chainCount);
+  if (!input.isDragging()) scheduleDeepPreview();
   message = '';
   updateControls();
   requestRender();
@@ -314,7 +325,7 @@ function showItemFeedback(kind: 'shield' | 'teleport'): void {
   setTimeout(() => overlay.remove(), 750);
 }
 
-async function useTeleport(targetId: string): Promise<void> {
+async function attemptTeleport(targetId: string): Promise<void> {
   if (teleportIndex === null || busy) return;
   try {
     const next = teleportItem(store.data, teleportIndex, targetId);
@@ -340,19 +351,32 @@ function openShop(note = ''): void {
   if (!shop || shop.closed) return;
   teleportIndex = null;
   const { profile } = store.data;
+  const { run } = store.data;
+  const recovering = run.status === 'dead';
+  const levelChoices = availableLevelChoices();
+  const otherLevels = levelChoices.filter((level) => level.id !== run.levelId);
   shopVisible = true;
-  openDialog('关间商店', `<section class="shop-panel"><div class="shop-header"><button class="secondary shop-refresh" id="shop-refresh" ${profile.bankedGems < SHOP_REFRESH_PRICE ? 'disabled' : ''}>刷新 ${icons.gems} ${SHOP_REFRESH_PRICE}</button><strong class="shop-wallet">${icons.gems} ${profile.bankedGems}</strong></div><div class="shop-offers">${shop.offers.map((id) => {
+  openDialog(recovering ? '复活整备' : '关间商店', `<section class="shop-panel">${recovering ? `<p class="shop-recovery-status" role="status"><span>生命 ${profile.health} / 3</span><span>本关随身道具已清空</span></p>` : ''}<div class="shop-header"><button class="secondary shop-refresh" id="shop-refresh" ${profile.bankedGems < SHOP_REFRESH_PRICE ? 'disabled' : ''}>刷新 ${icons.gems} ${SHOP_REFRESH_PRICE}</button><strong class="shop-wallet">${icons.gems} ${profile.bankedGems}</strong></div><div class="shop-offers">${shop.offers.map((id) => {
     const offer = SHOP_OFFERS.find((entry) => entry.id === id)!;
     const state = getShopOfferState(store.data, id);
     const healed = offer.healing ? Math.min(3, profile.health + offer.healing) - profile.health : 0;
     const description = offer.healing ? `回复 ${healed} 点生命 · ${profile.health} → ${Math.min(3, profile.health + offer.healing)} / 3` : offer.description;
     return `<article class="shop-offer ${shop.purchased.includes(id) ? 'purchased' : ''}"><div class="shop-item-visual">${itemIcon(id)}</div><h3 class="shop-name">${offer.name}</h3><p class="shop-effect">${description}</p><div class="shop-price">${icons.gems} ${offer.price}</div><button class="primary shop-buy" data-buy="${id}" ${state.disabled ? 'disabled' : ''}>${state.reason ?? '购买'}</button></article>`;
-  }).join('')}</div>${note ? `<p class="shop-note" role="status">${note}</p>` : ''}<div class="shop-actions"><button class="primary" id="shop-next">下一关 ${icons.execute}</button></div></section>`);
+  }).join('')}</div>${note ? `<p class="shop-note" role="status">${note}</p>` : ''}<div class="shop-actions">${recovering ? `<button class="primary shop-recovery-start" id="shop-retry">重新开始本关</button><details class="shop-level-picker"><summary class="secondary">选择其他关卡</summary><div class="level-list">${otherLevels.length ? otherLevels.map((level) => {
+    const unlocked = isLevelUnlocked(store.data, level.id);
+    return `<button data-shop-level="${level.id}" class="level-option" ${unlocked ? '' : 'disabled'}><span class="level-option-number">${String(level.levelNumber).padStart(2, '0')}</span><span><small>切开 ${level.goal} 个水果${level.elite ? '＋击败精英' : ''}</small></span><span>${unlocked ? icons.execute : icons.lock}</span></button>`;
+  }).join('') : '<p class="shop-empty-levels">暂无其他已解锁关卡</p>'}</div></details>` : `<button class="primary" id="shop-next">下一关 ${icons.execute}</button>`}</div></section>`);
   dialog.classList.add('shop-dialog');
   for (const button of dialog.querySelectorAll<HTMLButtonElement>('[data-buy]'))
     button.onclick = () => transactShop(() => buyShopOffer(store.data, button.dataset.buy as ShopOfferId), '购买成功');
   $('shop-refresh').onclick = () => transactShop(() => refreshShop(store.data), '商品已刷新');
-  $('shop-next').onclick = leaveShop;
+  if (recovering) {
+    $('shop-retry').onclick = () => leaveShop();
+    for (const button of dialog.querySelectorAll<HTMLButtonElement>('[data-shop-level]'))
+      button.onclick = () => leaveShop(button.dataset.shopLevel);
+  } else {
+    $('shop-next').onclick = () => leaveShop();
+  }
   renderInventory(true);
 }
 
@@ -367,14 +391,24 @@ function transactShop(action: () => SessionData, note: string): void {
   } catch (error) { openShop(error instanceof Error ? error.message : '购买失败。'); }
 }
 
-function leaveShop(): void {
+function leaveShop(levelId?: string): void {
   if (!shopVisible || busy) return;
-  const nextId = store.data.shop?.nextLevelId;
-  const next = finishShop(store.data);
-  if (!saveItemChange(next)) { openShop(store.notice); return; }
-  shopVisible = false;
-  closeDialog();
-  if (nextId) beginLevel(nextId);
+  const nextId = levelId ?? store.data.shop?.nextLevelId;
+  if (!nextId) return;
+  try {
+    const next = startLevel(finishShop(store.data), nextId, seed(), identity());
+    if (!store.save(next)) { openShop(store.notice); return; }
+    shopVisible = false;
+    path = [];
+    message = '';
+    closeDialog();
+    renderer.setAnimation(null);
+    render();
+    void playLevelEntry();
+    canvas.focus({ preventScroll: true });
+  } catch (error) {
+    openShop(error instanceof Error ? error.message : '无法进入关卡。');
+  }
 }
 
 function requestRender(): void {
@@ -390,13 +424,76 @@ function cancelScheduledRender(): void {
   renderRequest = 0;
 }
 
-function currentPreview(): TurnPreview {
+function markPerformance(name: string): void {
+  try { performance.mark(`chain-game:${name}`); } catch { /* Unsupported. */ }
+}
+
+function currentInspection(): PathInspection {
   const run = store.data.run;
-  if (cachedPreview?.run === run && cachedPreview.path === path)
-    return cachedPreview.value;
-  const value = previewTurn(run, path);
-  cachedPreview = { run, path, value };
+  if (cachedInspection?.run === run && cachedInspection.path === path)
+    return cachedInspection.value;
+  const value = inspectPath(run, path);
+  cachedInspection = { run, path, value };
   return value;
+}
+
+function provisionalPreview(run: RunState): TurnPreview {
+  const inspection = currentInspection();
+  return {
+    valid: inspection.valid,
+    ...(inspection.reason ? { reason: inspection.reason } : {}),
+    chainCount: inspection.chainCount,
+    kills: inspection.kills,
+    collectedGems: inspection.collectedGems,
+    rewardValue: 0,
+    rewardCount: 0,
+    damage: 0,
+    attackers: [],
+    blocked: 0,
+    endpoint: inspection.endpoint,
+    exits: inspection.exits,
+    remainingHp: run.player.hp,
+  };
+}
+
+function currentPreview(): TurnPreview {
+  const preview = previewClient.getCached(store.data.run, path);
+  return preview?.result.ok ? preview.result.preview : provisionalPreview(store.data.run);
+}
+
+function scheduleDeepPreview(): void {
+  if (!path.length || busy || store.data.run.status !== 'playing') return;
+  const acceptedRun = store.data.run;
+  const acceptedPath = path;
+  if (previewClient.getCached(acceptedRun, acceptedPath)) {
+    markPerformance('preview-ready');
+    return;
+  }
+  markPerformance('preview-requested');
+  void previewClient.preview(acceptedRun, acceptedPath).then(() => {
+    if (busy || store.data.run !== acceptedRun || path !== acceptedPath) return;
+    markPerformance('preview-ready');
+    try {
+      performance.measure(
+        'chain-game:release-to-preview',
+        'chain-game:path-released',
+        'chain-game:preview-ready',
+      );
+    } catch { /* Programmatic route edits may not have a release mark. */ }
+    applyPreviewPresentation(acceptedRun, currentPreview(), true);
+  }).catch(() => {
+    if (busy || store.data.run !== acceptedRun || path !== acceptedPath) return;
+    markPerformance('preview-failed');
+    applyPreviewPresentation(acceptedRun, currentPreview(), true);
+  });
+}
+
+function sameTargets(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return left.length === right.length &&
+    left.every((target, index) => target === right[index]);
 }
 
 function updateControls(): void {
@@ -408,8 +505,19 @@ function updateControls(): void {
     store.data.run.status !== 'playing' ||
     dialog.open;
   // Enabling GO only needs path validity; do not simulate rewards and gravity.
-  const route = inspectPath(store.data.run, path);
-  executeButton.disabled = locked || !route.valid;
+  const route = currentInspection();
+  const disabled = locked || !route.valid;
+  if (executeButton.disabled && !disabled) {
+    markPerformance('go-enabled');
+    try {
+      performance.measure(
+        'chain-game:release-to-go',
+        'chain-game:path-released',
+        'chain-game:go-enabled',
+      );
+    } catch { /* A programmatic path may not have a release mark. */ }
+  }
+  executeButton.disabled = disabled;
   executeButton.dataset.mode = busy ? 'busy' : route.exits ? 'exit' : 'route';
   executeButton.setAttribute('aria-busy', String(busy || !renderer.assetsReady));
   executeButton.setAttribute(
@@ -437,6 +545,76 @@ function updateControls(): void {
     $('hint').textContent = assetError || '正在载入…';
     $('hint').classList.remove('danger-text');
   }
+}
+
+/** Preview-only updates never repeat the committed-turn simulation. */
+function applyPreviewPresentation(
+  run: RunState,
+  preview: TurnPreview,
+  paintBoard: boolean,
+): void {
+  const level = getRunLevel(run);
+  $('route-preview').hidden = path.length === 0;
+  $('chain-count').textContent = String(preview.chainCount);
+  renderGeneratedGems(path.length ? preview.rewardCount : 0);
+  $('route-summary').textContent = path.length
+    ? `连击 ${preview.chainCount}，本轮生成 ${preview.rewardCount} 颗宝石`
+    : '';
+  tutorialView = tutorial.view(
+    store.data,
+    path,
+    preview,
+    input.isDragging(),
+    inspectedEntityId,
+  );
+  tutorialPresenter.render(
+    tutorialView,
+    false,
+    input.isDragging() || dialog.open,
+  );
+  if (paintBoard) {
+    renderer.render({
+      state: run,
+      path: teleportIndex !== null ? [] : path,
+      preview,
+      inspectedEntityId,
+      teleportSelecting: teleportIndex !== null,
+      tutorial: tutorialView,
+    });
+  }
+  let hint = '点击或拖动连接同种水果；点击无法接入路线的危险水果查看范围。';
+  if (run.exitUnlocked) hint = '出口已打开。连到顶部入口，再拖向门内。';
+  if (path.length && preview.valid)
+    hint = preview.exits
+      ? '这条路线将安全撤离，随身宝石计入库存。'
+      : preview.damage >= run.player.hp
+        ? '这条路线会耗尽生命，随身宝石将全部失去。'
+        : preview.damage
+          ? `终点会受到 ${preview.attackers.length} 个危险水果攻击。可以回退，重新规划。`
+          : preview.rewardValue
+            ? '长链将生成宝石。记得在之后的路线中拾取它。'
+            : '路线已保留。继续点击或拖动选线、右键回退，或按 GO。';
+  if (
+    !path.length &&
+    run.status === 'playing' &&
+    legalTargets(run).length === 0
+  )
+    hint = '当前位置没有可行动路线。可在菜单重试，生命会保留。';
+  if (run.status === 'escaped')
+    hint = '随身宝石已入库，正在前往下一关。';
+  if (run.status === 'dead') hint = '生命已耗尽，正在准备复活整备。';
+  if (inspectedEntityId) {
+    const inspected = run.entities[inspectedEntityId];
+    hint = inspected && isElite(inspected)
+      ? `精英攻击周围八格，连接它时需要至少 ${level.elite?.minChain ?? 10} 连击。每堆宝石也计 1 连。`
+      : '红色方框是这个危险水果的攻击范围。点击其他位置关闭。';
+  }
+  $('hint').textContent = inspectedEntityId ? hint : message || hint;
+  $('hint').classList.toggle('danger-text', preview.damage > 0);
+  const notice = store.notice || assetError;
+  $('notice').hidden = !notice;
+  $('notice').textContent = notice;
+  updateControls();
 }
 
 function render(): void {
@@ -474,78 +652,7 @@ function render(): void {
   $('objective-count').textContent = `${run.killCount} / ${level.goal}`;
   $('progress-fill').style.width =
     `${Math.min(100, (run.killCount / level.goal) * 100)}%`;
-  $('route-preview').hidden = path.length === 0;
-  $('chain-count').textContent = String(preview.chainCount);
-  renderGeneratedGems(path.length ? preview.rewardCount : 0);
-  $('route-summary').textContent = path.length
-    ? `连击 ${preview.chainCount}，本轮生成 ${preview.rewardCount} 颗宝石`
-    : '';
-  tutorialView = tutorial.view(
-    store.data,
-    path,
-    preview,
-    input.isDragging(),
-    inspectedEntityId,
-  );
-  tutorialPresenter.render(
-    tutorialView,
-    false,
-    input.isDragging() || dialog.open,
-  );
-  renderer.render({
-    state: run,
-    path: teleportIndex !== null ? [] : path,
-    preview,
-    inspectedEntityId,
-    teleportSelecting: teleportIndex !== null,
-    tutorial: tutorialView,
-  });
-  let hint = '点击或拖动连接同种水果；点击无法接入路线的危险水果查看范围。';
-  if (run.exitUnlocked) hint = '出口已打开。连到顶部入口，再拖向门内。';
-  if (path.length && preview.valid)
-    hint = preview.exits
-      ? '这条路线将安全撤离，随身宝石计入库存。'
-      : preview.damage >= run.player.hp
-        ? '这条路线会耗尽生命，随身宝石将全部失去。'
-        : preview.damage
-          ? `终点会受到 ${preview.attackers.length} 个危险水果攻击。可以回退，重新规划。`
-          : preview.rewardValue
-            ? '长链将生成宝石。记得在之后的路线中拾取它。'
-            : '路线已保留。继续点击或拖动选线、右键回退，或按 GO。';
-  if (
-    !path.length &&
-    run.status === 'playing' &&
-    legalTargets(run).length === 0
-  )
-    hint = '当前位置没有可行动路线。可在菜单重试，生命会保留。';
-  if (run.status === 'escaped')
-    hint = '随身宝石已入库，正在前往下一关。';
-  if (run.status === 'dead') hint = '本关行动结束，宝石库存和已通关记录保留。';
-  if (inspectedEntityId) {
-    const inspected = run.entities[inspectedEntityId];
-    hint = inspected && isElite(inspected)
-      ? `精英攻击周围八格，连接它时需要至少 ${level.elite?.minChain ?? 10} 连击。每堆宝石也计 1 连。`
-      : '红色方框是这个危险水果的攻击范围。点击其他位置关闭。';
-  }
-  $('hint').textContent = inspectedEntityId ? hint : message || hint;
-  $('hint').classList.toggle('danger-text', preview.damage > 0);
-  const notice = store.notice || assetError;
-  $('notice').hidden = !notice;
-  $('notice').textContent = notice;
-  renderResult();
-  updateControls();
-}
-
-function renderResult(): void {
-  const { run } = store.data;
-  const result = $('result');
-  result.hidden = run.status !== 'dead';
-  if (result.hidden) {
-    result.replaceChildren();
-    return;
-  }
-  result.innerHTML = `<div class="result-card"><span class="result-symbol failure">${icons.close}</span><span class="eyebrow">行动结束</span><h2>生命已耗尽</h2><p>本关随身宝石已失去，库存宝石保留。</p><p class="result-note">生命回复可在通关后的商店购买。此次行动已结束，可在菜单重置进度。</p><button id="death-menu" class="primary">打开菜单</button></div>`;
-  $('death-menu').onclick = openMenu;
+  applyPreviewPresentation(run, preview, true);
 }
 
 async function commit(): Promise<void> {
@@ -566,9 +673,27 @@ async function commit(): Promise<void> {
   let committed = false;
   let committedEvents: readonly GameEvent[] = [];
   busy = true;
+  markPerformance('commit-requested');
   updateControls();
   try {
-    const result = commitPath(store.data, acceptedPath);
+    let prepared = previewClient.getCached(before, acceptedPath);
+    if (!prepared) {
+      markPerformance('commit-wait-preview');
+      prepared = await previewClient.preview(before, acceptedPath);
+    }
+    if (store.data.run !== before || !sameTargets(path, acceptedPath)) {
+      message = '路线已经变化，请重新选择';
+      return;
+    }
+    markPerformance('commit-ready');
+    try {
+      performance.measure(
+        'chain-game:commit-wait',
+        'chain-game:commit-requested',
+        'chain-game:commit-ready',
+      );
+    } catch { /* Performance marks may be unavailable. */ }
+    const result = commitResolvedTurn(store.data, acceptedPath, prepared.result);
     if (!result.ok) {
       message = result.error;
       return;
@@ -602,15 +727,19 @@ async function commit(): Promise<void> {
     renderer.setAnimation(null);
     render();
   }
-  if (committed) continueAfterExit();
+  if (committed) continueAfterTerminalState();
 }
 
-/** The previous exit is settled before a new run is created and saved. */
-function continueAfterExit(): void {
-  if (busy || !renderer.assetsReady || store.data.run.status !== 'escaped') return;
+/** A settled exit opens its shop; a failed run first revives into its own shop. */
+function continueAfterTerminalState(): void {
+  if (busy || !renderer.assetsReady) return;
+  if (store.data.run.status !== 'escaped' && store.data.run.status !== 'dead') return;
   const prepared = ensureShop(store.data);
-  if (prepared !== store.data && !store.save(prepared)) { render(); return; }
+  const needsPreparation = prepared !== store.data;
+  if (needsPreparation && !store.save(prepared)) { render(); return; }
+  if (needsPreparation) render();
   if (store.data.shop && !store.data.shop.closed) { openShop(); return; }
+  if (store.data.run.status === 'dead') return;
   const nextId = getNextSessionLevelId(store.data);
   if (nextId) beginLevel(nextId);
 }
@@ -668,7 +797,16 @@ function openDialog(title: string, html: string): void {
   input.cancelDrag();
   inspectEntity(null);
   dialog.classList.remove('shop-dialog');
+  dialog.classList.toggle('titleless-heading', title.length === 0);
+  $('dialog-title').hidden = title.length === 0;
   $('dialog-title').textContent = title;
+  if (title) {
+    dialog.setAttribute('aria-labelledby', 'dialog-title');
+    dialog.removeAttribute('aria-label');
+  } else {
+    dialog.removeAttribute('aria-labelledby');
+    dialog.setAttribute('aria-label', '游戏菜单');
+  }
   $('dialog-body').innerHTML = html;
   if (!dialog.open) dialog.showModal();
   updateControls();
@@ -676,6 +814,7 @@ function openDialog(title: string, html: string): void {
 function closeDialog(): void {
   if (shopVisible) { leaveShop(); return; }
   dialog.classList.remove('shop-dialog');
+  dialog.classList.remove('titleless-heading');
   dialog.close();
   pendingAction = null;
   updateControls();
@@ -706,48 +845,21 @@ function openHelp(): void {
   if (busy) return;
   openDialog(
     '每一步，都可以想清楚',
-    `<div class="help-content"><p><b>规划</b>：点击水果，或按住鼠标左键、单指拖动，从武士连接八方向相邻的同种水果。路线可以交叉，但不能重复连接同一个目标。松开只保留路线，不会执行。</p><p><b>修改</b>：点击或回拖到之前已选的水果会截短路线；点击或拖回武士清空。松手后按右键、Backspace 或 Delete 退一步。不同种类的水果不影响已有路线。</p><p><b>行动</b>：按「GO」，或让棋盘获得焦点后按 Enter / 空格。主角停在路线终点，已选水果被切开，空位掉落补充。</p><p><b>宝石</b>：一条路线达到 10 / 15 / 20 / 25 连击，分别生成价值 1 / 2 / 3 / 5 的宝石。每个水果或每堆宝石都计 1 次连击，出口不计。宝石留在棋盘；经过它才能收集，并允许下一段切换水果种类。</p><p><b>危险</b>：点击带红色 ! 的危险水果时，能接入当前路线就优先连线，不显示攻击范围；无法接入时，用闪烁红框查看它上下左右四格的攻击范围。已选节点仍按路线回退规则处理。一次只查看一个，点击其他位置关闭。只要本轮没有切开它，停在其攻击范围内就会扣血；多个攻击会叠加。新变危险的水果到下一轮才会攻击。</p><p><b>愤怒出现</b>：第 N 关少于 min(3 + N, 8) 连击时，前两次各随机变异 1 个现有平静水果，第三次起各变异 2 个。次数在本关累计，长连击不清零；水果和宝石堆都计 1 连。击杀进度达到目标的 max(1/N, 1/10) 后，每个补位普通水果有 1/15 概率愤怒。新变异和新补位的愤怒水果都从下一轮开始攻击。</p><p><b>精英</b>：第三关及后续守门关门口的金冠水果始终愤怒，攻击周围八格；接入它时必须已达到 10 连击（包含它自己，宝石堆计 1 连），水果种类仍需匹配。精英不会被宝石砸死。首次击败精英且累计切开数量达到本关目标后开门（第三关为 60）；之后无精英时，每个新补位水果有 1/40 概率成为精英，场上最多一个。</p><p><b>撤离</b>：已有击杀加当前路线水果达到目标时，可在同一条路线连到顶部入口，再拖向门并按 GO 直接撤离。拖到门上会预览开锁，撤回则复锁；此前已解锁的门保持开启。倒下会失去本关随身宝石。</p><p><b>生命</b>：换关、重试和刷新都不回血。第二关起通关后可在商店花宝石回复生命、购买道具或下一关双倍宝石；5 宝石可刷新商品。全新存档从 3 点生命开始。</p><p><b>道具</b>：右侧最多持有三个道具，可点击槽位或在棋盘获得焦点后按 1 / 2 / 3 选择。护盾自动抵挡一次路线结束后的全部攻击；点击瞬移药水再点击普通水果或宝石即可交换位置，不推进回合，右键或 Esc 取消。连击药水点选后为下一次路线增加连击，执行时才消耗，再点一次可取消；不增加实际击杀。</p><div class="legend"><span>橙子</span><span>梨</span><span>黑莓</span><span>${icons.gems} 宝石</span></div></div>`,
+    `<div class="help-content"><p><b>规划</b>：点击水果，或按住鼠标左键、单指拖动，从武士连接八方向相邻的同种水果。路线可以交叉，但不能重复连接同一个目标。松开只保留路线，不会执行。</p><p><b>修改</b>：点击或回拖到之前已选的水果会截短路线；点击或拖回武士清空。松手后按右键、Backspace 或 Delete 退一步。不同种类的水果不影响已有路线。</p><p><b>行动</b>：按「GO」，或让棋盘获得焦点后按 Enter / 空格。主角停在路线终点，已选水果被切开，空位掉落补充。</p><p><b>宝石</b>：一条路线达到 10 / 15 / 20 / 25 连击，分别生成价值 1 / 2 / 3 / 5 的宝石。每个水果或每堆宝石都计 1 次连击，出口不计。宝石留在棋盘；经过它才能收集，并允许下一段切换水果种类。</p><p><b>危险</b>：点击带红色 ! 的危险水果时，能接入当前路线就优先连线，不显示攻击范围；无法接入时，用闪烁红框查看它上下左右四格的攻击范围。已选节点仍按路线回退规则处理。一次只查看一个，点击其他位置关闭。只要本轮没有切开它，停在其攻击范围内就会扣血；多个攻击会叠加。新变危险的水果到下一轮才会攻击。</p><p><b>愤怒出现</b>：第 N 关少于 min(3 + N, 8) 连击时，前两次各随机变异 1 个现有平静水果，第三次起各变异 2 个。次数在本关累计，长连击不清零；水果和宝石堆都计 1 连。击杀进度达到目标的 max(1/N, 1/10) 后，每个补位普通水果有 1/15 概率愤怒。新变异和新补位的愤怒水果都从下一轮开始攻击。</p><p><b>精英</b>：第三关及后续守门关门口的金冠水果始终愤怒，攻击周围八格；接入它时必须已达到 10 连击（包含它自己，宝石堆计 1 连），水果种类仍需匹配。精英不会被宝石砸死。首次击败精英且累计切开数量达到本关目标后开门（第三关为 60）；之后无精英时，每个新补位水果有 1/40 概率成为精英，场上最多一个。</p><p><b>撤离</b>：已有击杀加当前路线水果达到目标时，可在同一条路线连到顶部入口，再拖向门并按 GO 直接撤离。拖到门上会预览开锁，撤回则复锁；此前已解锁的门保持开启。倒下会失去本关随身宝石。</p><p><b>生命</b>：换关、重试和刷新都不回血。第二关起通关后可在商店花宝石回复生命、购买道具或下一关双倍宝石；5 宝石可刷新商品。生命耗尽后清空本关随身道具，以 1 点生命进入复活整备；可在那里买生命和道具，再重新开始本关或选择其他已解锁关卡。</p><p><b>道具</b>：右侧最多持有三个道具，可点击槽位或在棋盘获得焦点后按 1 / 2 / 3 选择。护盾自动抵挡一次路线结束后的全部攻击；点击瞬移药水再点击普通水果或宝石即可交换位置，不推进回合，右键或 Esc 取消。连击药水点选后为下一次路线增加连击，执行时才消耗，再点一次可取消；不增加实际击杀。</p><div class="legend"><span>橙子</span><span>梨</span><span>黑莓</span><span>${icons.gems} 宝石</span></div></div>`,
   );
 }
 
-function openTutorial(): void {
-  if (busy || store.data.profile.health === 0) return;
+function availableLevelChoices() {
   const { run } = store.data;
-  const resumeGuide = () => {
-    tutorial.restart(store.data);
-    inspectEntity(null);
-    closeDialog();
-    render();
-    canvas.focus({ preventScroll: true });
-  };
-  const startGuide = () => {
-    if (beginLevel(LEVELS[0].id)) resumeGuide();
-  };
-  if (run.levelId === LEVELS[0].id && run.status === 'playing') {
-    if (run.turn === 0 && path.length === 0) {
-      resumeGuide();
-      return;
-    }
-    openDialog(
-      '新手引导',
-      `<p class="dialog-copy">可以在当前棋盘继续学习，也可以回到第一关开场，从连接同种水果开始。</p><div class="dialog-actions"><button id="tutorial-resume" class="primary">继续当前引导</button><button id="tutorial-from-start" class="secondary">从头学习</button></div>`,
-    );
-    $('tutorial-resume').onclick = resumeGuide;
-    $('tutorial-from-start').onclick = () =>
-      confirmAction(
-        '从头学习',
-        '将重新开始第一关，清空当前路线和本关随身宝石。生命和宝石库存保留，从第一步连线开始引导。',
-        startGuide,
-      );
-    return;
-  }
-  if (run.status === 'playing')
-    confirmAction(
-      '进入新手引导',
-      '将离开当前关卡，清空当前路线和本关随身宝石。生命和宝石库存保留，进入第一关从连线开始学习。',
-      startGuide,
-    );
-  else startGuide();
+  const levels = [
+    ...LEVELS,
+    ...getAvailableEndlessLevelIds(store.data).map((id) =>
+      id === run.levelId ? getRunLevel(run) : getLevel(id),
+    ),
+  ];
+  return levels.filter(
+    (level, index) => levels.findIndex((candidate) => candidate.id === level.id) === index,
+  );
 }
 
 function openMenu(): void {
@@ -757,19 +869,17 @@ function openMenu(): void {
   }
   teleportIndex = null;
   const { run, profile } = store.data;
-  const menuLevels = [...LEVELS, ...getAvailableEndlessLevelIds(store.data).map((id) =>
-    id === run.levelId ? getRunLevel(run) : getLevel(id),
-  )];
+  const menuLevels = availableLevelChoices();
   openDialog(
-    '行囊与关卡',
-    `<div class="menu-summary"><span>生命 ${profile.health} / 3</span><span>宝石库存 ${profile.bankedGems}</span></div><div class="level-list">${menuLevels.map(
+    '',
+    `<div class="menu-summary" role="status" aria-label="生命 ${profile.health} / ${profile.maxHealth}，宝石库存 ${profile.bankedGems}"><span class="menu-resource"><span class="menu-resource-icon">${icons.heart}</span><strong>${profile.health} / ${profile.maxHealth}</strong></span><span class="menu-resource"><span class="menu-resource-icon">${icons.gems}</span><strong>${profile.bankedGems}</strong></span></div><div class="level-list">${menuLevels.map(
       (level) => {
         const unlocked = isLevelUnlocked(store.data, level.id);
-        return `<button data-level="${level.id}" class="level-option" ${!unlocked || profile.health === 0 ? 'disabled' : ''}><span class="level-option-number">${String(level.levelNumber).padStart(2, '0')}</span><span><b>${level.name}</b><small>${level.height} 行 × ${level.width} 列 · 切开 ${level.goal} 个水果${level.elite ? '＋击败精英' : ''}${profile.clearedLevelIds.includes(level.id) ? ' · 已通关' : level.id === run.levelId ? ' · 当前关卡' : level.generation ? ' · 继续前进' : ''}</small></span><span>${unlocked ? icons.execute : icons.lock}</span></button>`;
+        return `<button data-level="${level.id}" class="level-option" ${!unlocked || profile.health === 0 ? 'disabled' : ''}><span class="level-option-number">${String(level.levelNumber).padStart(2, '0')}</span><span><small>切开 ${level.goal} 个水果${level.elite ? '＋击败精英' : ''}${profile.clearedLevelIds.includes(level.id) ? ' · 已通关' : level.id === run.levelId ? ' · 当前关卡' : level.generation ? ' · 继续前进' : ''}</small></span><span>${unlocked ? icons.execute : icons.lock}</span></button>`;
       },
     ).join(
       '',
-    )}</div><p class="dialog-copy">重试、换关均保留当前生命。离开未完成的关卡会失去随身宝石；成功撤离后自动进入下一关。第四关起持续生成新关卡，守门关需要击败精英。</p><button id="tutorial-restart" class="secondary" ${profile.health === 0 ? 'disabled' : ''}>${run.levelId === LEVELS[0].id && run.status === 'playing' ? '重看新手引导' : '进入教程关'}</button><div class="menu-tools"><button id="export-save" class="secondary">导出存档</button><button id="reset-save" class="text-button danger-text">重置全部进度</button></div>`,
+    )}</div><div class="menu-tools"><div class="menu-file-tools"><button id="export-save" class="secondary">导出存档</button><button id="import-save" class="secondary">导入存档</button></div><button id="reset-save" class="text-button danger-text">重置全部进度</button></div>`,
   );
   for (const button of dialog.querySelectorAll<HTMLButtonElement>(
     '[data-level]',
@@ -785,7 +895,6 @@ function openMenu(): void {
         );
       else beginLevel(levelId);
     };
-  $('tutorial-restart').onclick = openTutorial;
   $('export-save').onclick = () => {
     if (busy) return;
     const url = URL.createObjectURL(
@@ -797,6 +906,7 @@ function openMenu(): void {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
+  $('import-save').onclick = () => $<HTMLInputElement>('import-save-file').click();
   $('reset-save').onclick = () =>
     confirmAction(
       '重置全部进度',
@@ -810,6 +920,45 @@ function openMenu(): void {
         void playLevelEntry();
       },
     );
+}
+
+function adoptImportedSession(data: SessionData): void {
+  presenter.finishImmediately();
+  levelEntry.finishImmediately();
+  audio.stop();
+  input.cancelDrag();
+  store.reset(data);
+  path = [];
+  message = '';
+  teleportIndex = null;
+  inspectedEntityId = null;
+  tutorialView = null;
+  shopVisible = false;
+  renderer.setAnimation(null);
+  render();
+  if (data.run.status === 'escaped' || data.run.status === 'dead')
+    continueAfterTerminalState();
+  else if (data.run.status === 'playing' && data.run.turn === 0)
+    void playLevelEntry();
+}
+
+async function importSessionFile(file: File): Promise<void> {
+  try {
+    if (file.size > 5_000_000) throw new Error('invalid');
+    const imported = parseImportedSession(await file.text());
+    if (!imported) throw new Error('invalid');
+    confirmAction(
+      '导入存档',
+      '导入会覆盖当前存档中的生命、宝石、道具和关卡进度。',
+      () => adoptImportedSession(imported),
+    );
+  } catch {
+    openDialog(
+      '导入失败',
+      '<p class="dialog-copy">文件不是有效或兼容的连刃物语存档。</p><div class="dialog-actions"><button id="import-error-close" class="secondary">返回</button></div>',
+    );
+    $('import-error-close').onclick = closeDialog;
+  }
 }
 
 executeButton.addEventListener('pointerdown', (event) => {
@@ -842,10 +991,17 @@ canvas.addEventListener('keydown', (event) => {
 $('menu-button').onclick = openMenu;
 $('help-button').onclick = openHelp;
 $('close-dialog').onclick = closeDialog;
+$<HTMLInputElement>('import-save-file').addEventListener('change', async (event) => {
+  const input = event.currentTarget as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (file) await importSessionFile(file);
+});
 dialog.addEventListener('close', () => {
   pendingAction = null;
   shopVisible = false;
   dialog.classList.remove('shop-dialog');
+  dialog.classList.remove('titleless-heading');
   updateControls();
 });
 dialog.addEventListener('cancel', (event) => {
@@ -894,7 +1050,8 @@ void renderer.ready.then(
     render();
     // A reload between exit settlement and the next save resumes progression.
     // An untouched run replays only its visuals, never regenerates its board.
-    if (store.data.run.status === 'escaped') continueAfterExit();
+    if (store.data.run.status === 'escaped' || store.data.run.status === 'dead')
+      continueAfterTerminalState();
     else if (store.data.run.status === 'playing' && store.data.run.turn === 0)
       void playLevelEntry();
   },

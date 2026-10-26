@@ -1,16 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buyShopOffer,
   commitPath,
+  commitResolvedTurn,
+  ensureShop,
+  finishShop,
   isLevelUnlocked,
   isSessionData,
   newSession,
+  parseImportedSession,
+  refreshShop,
   startLevel,
   type SessionData,
 } from '../demos/chain-game/src/application/session';
+import { TurnPreviewClient } from '../demos/chain-game/src/application/turn-preview-client';
 import {
   entityAt,
   getLevel,
+  resolveTurn,
   TUTORIAL_CHAIN,
   type Creep,
   type Point,
@@ -109,11 +117,13 @@ void test('only successful escape unlocks the second level and settlement happen
   assert.equal(escaped.profile.settledRunIds.length, 1);
 });
 
-void test('death persists zero health, loses only carried loot, and cannot be bypassed by retry', () => {
+void test('death enters a recovery shop at one health with carried loot and items cleared', () => {
   const data = newSession(51, 'death');
   data.profile.health = 1;
   data.run.player.hp = 1;
   data.profile.bankedGems = 8;
+  data.profile.inventory = ['combo-3', 'combo-5'];
+  data.run.inventory = ['combo-3', 'combo-5'];
   data.run.carriedGems = 6;
   const dead = damageOnce(data);
   assert.equal(dead.run.status, 'dead');
@@ -121,12 +131,70 @@ void test('death persists zero health, loses only carried loot, and cannot be by
   assert.equal(dead.run.player.hp, 0);
   assert.equal(dead.run.carriedGems, 0);
   assert.equal(dead.profile.bankedGems, 8);
-  assert.throws(() => startLevel(dead, 'level-001', 52, 'cannot-heal'));
+  assert.deepEqual(dead.profile.inventory, ['combo-3', 'combo-5']);
+  assert.equal(isSessionData(dead), true);
+  const recovered = ensureShop(dead);
+  assert.equal(recovered.profile.health, 1);
+  assert.equal(recovered.run.player.hp, 1);
+  assert.deepEqual(recovered.profile.inventory, []);
+  assert.deepEqual(recovered.run.inventory, []);
+  assert.equal(recovered.shop?.nextLevelId, 'level-001');
+  assert.equal(recovered.shop?.closed, false);
+  assert.equal(isSessionData(recovered), true);
+  const refreshed = refreshShop(recovered);
+  assert.equal(refreshed.profile.bankedGems, 3);
+  assert.equal(refreshed.profile.health, 1);
+  assert.deepEqual(refreshed.profile.inventory, []);
+  assert.equal(refreshed.shop?.refreshCount, 1);
+  assert.equal(isSessionData(refreshed), true);
+  const healed = buyShopOffer(
+    {
+      ...refreshed,
+      profile: { ...refreshed.profile, bankedGems: 20 },
+      shop: {
+        ...refreshed.shop!,
+        offers: ['heal-2', 'shield', 'teleport'],
+        purchased: [],
+      },
+    },
+    'heal-2',
+  );
+  assert.equal(healed.profile.health, 3);
+  assert.equal(healed.run.player.hp, 3);
+  assert.equal(isSessionData(healed), true);
+  const retry = startLevel(finishShop(healed), 'level-001', 52, 'revived');
+  assert.equal(retry.run.status, 'playing');
+  assert.equal(retry.profile.health, 3);
+  assert.deepEqual(retry.profile.inventory, []);
   const storage = new MemoryStorage();
-  storage.setItem(SAVE_KEY, JSON.stringify(dead));
+  storage.setItem(SAVE_KEY, JSON.stringify(recovered));
   const reloaded = new SessionStore(storage, () => newSession(53, 'unused'));
-  assert.deepEqual(reloaded.data, dead);
-  assert.equal(reloaded.data.profile.health, 0);
+  assert.deepEqual(reloaded.data, recovered);
+  assert.equal(reloaded.data.profile.health, 1);
+  assert.equal(reloaded.data.shop?.closed, false);
+});
+
+void test('a recovered player can choose another unlocked level from the death shop', () => {
+  const escaped = escape(newSession(61, 'route'));
+  const second = startLevel(finishShop(escaped), 'level-002', 62, 'second');
+  second.profile.health = 1;
+  second.run.player.hp = 1;
+  const dead = damageOnce(second);
+  assert.equal(dead.run.status, 'dead');
+  const recovered = ensureShop(dead);
+  assert.equal(recovered.shop?.nextLevelId, 'level-002');
+  assert.equal(recovered.profile.health, 1);
+  assert.equal(isLevelUnlocked(recovered, 'level-001'), true);
+  const switched = startLevel(
+    finishShop(recovered),
+    'level-001',
+    63,
+    'retry-other',
+  );
+  assert.equal(switched.run.levelId, 'level-001');
+  assert.equal(switched.run.status, 'playing');
+  assert.equal(switched.profile.health, 1);
+  assert.equal(isSessionData(switched), true);
 });
 
 void test('save and reload restore board, health, RNG, progress and action history atomically', () => {
@@ -154,6 +222,42 @@ void test('save and reload restore board, health, RNG, progress and action histo
     false,
     'the same revision cannot be applied again',
   );
+});
+
+void test('imported saves are fully validated before replacing the current session', () => {
+  const source = newSession(74, 'import-source');
+  source.profile.bankedGems = 19;
+  const imported = parseImportedSession(JSON.stringify(source));
+  assert.ok(imported);
+  assert.equal(imported.profile.id, 'import-source');
+  assert.equal(imported.profile.bankedGems, 19);
+  assert.equal(isSessionData(imported), true);
+  assert.equal(parseImportedSession('{broken json'), undefined);
+  const corrupt = JSON.stringify({
+    ...newSession(75, 'corrupt-import'),
+    run: { ...newSession(75, 'corrupt-import').run, rng: null },
+  });
+  assert.equal(parseImportedSession(corrupt), undefined);
+});
+
+void test('async preview returns and caches the complete turn result for commit reuse', async () => {
+  const data = newSession(76, 'async-preview');
+  const targets = TUTORIAL_CHAIN.map((pos) => entityAt(data.run, pos)!.id);
+  const client = new TurnPreviewClient(() => null);
+  const first = await client.preview(data.run, targets);
+  assert.equal(first.result.ok, true);
+  assert.equal(client.getCached(data.run, targets), first);
+  assert.equal(await client.preview(data.run, targets), first);
+  client.dispose();
+
+  const resolved = resolveTurn(data.run, {
+    runId: data.run.runId,
+    revision: data.run.revision,
+    targets,
+  });
+  const committed = commitResolvedTurn(data, targets, resolved);
+  assert.equal(committed.ok, true);
+  assert.equal(committed.ok && committed.data.run.turn, 1);
 });
 
 void test('unreadable and structurally corrupt saves remain available for export', () => {

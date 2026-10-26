@@ -34,6 +34,10 @@ export const MOTION_TIMING = {
   rewardFallMaxMs: 420,
   rewardCrushMs: 420,
   exitFadeMs: 130,
+  deathFallMs: 440,
+  deathFadeDelayMs: 470,
+  deathFadeMs: 250,
+  deathDurationMs: 720,
 } as const;
 
 /** Current fruit is counted; pickups inherit the rate of the last cut fruit. */
@@ -91,13 +95,14 @@ export interface FruitBurstMotion {
 
 /** A disposable presentation snapshot; rules and saved state never read it. */
 export interface MotionFrame {
-  phase: 'route' | 'impact' | 'settle' | 'reward' | 'refill' | 'complete';
+  phase: 'route' | 'impact' | 'settle' | 'reward' | 'refill' | 'death' | 'complete';
   state: RunState;
   player: {
     pos: Point;
     scaleX: number;
     scaleY: number;
     alpha: number;
+    rotation: number;
     sprite: SamuraiPose;
   };
   entities: Record<string, EntityMotion>;
